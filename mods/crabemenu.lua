@@ -388,3 +388,124 @@ Crabe.Menu.registerInCategory("Economy", {
         return on and "Progression force-unlocked" or "Progression lock restored"
     end,
 })
+
+-- ---------------------------------------------------------------------------
+-- 7. Steam Multiplayer (P2P Lobbies & Friends)
+-- ---------------------------------------------------------------------------
+
+Crabe.Menu.registerInCategory("Multiplayer", {
+    label = "Steam Persona Status",
+    action = function()
+        if not Crabe.Multiplayer or not Crabe.Multiplayer.Steam then
+            return "Error: Steam subsystem not loaded in CrabeLoader."
+        end
+        local okAvail, avail = pcall(Crabe.Multiplayer.Steam.isAvailable)
+        if not okAvail or not avail then
+            return "Steam Status: Offline / Game not running through Steam client."
+        end
+        local okName, name = pcall(Crabe.Multiplayer.Steam.getPersonaName)
+        local okFriends, friends = pcall(Crabe.Multiplayer.Steam.getFriendCount)
+        local displayName = (okName and name and #tostring(name) > 0) and tostring(name) or "Player"
+        local friendCount = (okFriends and tonumber(friends)) and tonumber(friends) or 0
+        return string.format("Steam Online: '%s' | %d friends online", displayName, friendCount)
+    end,
+})
+
+Crabe.Menu.registerInCategory("Multiplayer", {
+    label = "Create Steam Lobby (Friends Only)",
+    action = function()
+        if not Crabe.Multiplayer or not Crabe.Multiplayer.Steam then
+            return "Error: Multiplayer API unavailable."
+        end
+        local okAvail, avail = pcall(Crabe.Multiplayer.Steam.isAvailable)
+        if not okAvail or not avail then
+            return "Error: Steam is offline. Please launch via Steam client."
+        end
+        local okLobby, created = pcall(Crabe.Multiplayer.Steam.createLobby, true, 4)
+        if okLobby and created then
+            return "Lobby created successfully! Ready for friends."
+        else
+            return "Notice: Valve disables Steam Lobbies for DI3 Gold Edition (AppID 541670). Use Multiplayer P2P Direct Connect!"
+        end
+    end,
+})
+
+Crabe.Menu.registerInCategory("Multiplayer", {
+    label = "Invite Friends (Steam Overlay)",
+    action = function()
+        if not Crabe.Multiplayer or not Crabe.Multiplayer.Steam then
+            return "Error: Multiplayer API unavailable."
+        end
+        local okAvail, avail = pcall(Crabe.Multiplayer.Steam.isAvailable)
+        if not okAvail or not avail then
+            return "Error: Steam is offline. Please launch via Steam client."
+        end
+        local okInvite, opened = pcall(Crabe.Multiplayer.Steam.openInviteOverlay)
+        if okInvite and opened then
+            return "Opened Steam Overlay! Send invites to friends."
+        else
+            return "Error: Overlay not available. Press Shift+Tab manually."
+        end
+    end,
+})
+
+Crabe.Menu.registerInCategory("Multiplayer", {
+    label = "Steam Lobby Status",
+    action = function()
+        if not Crabe.Multiplayer or not Crabe.Multiplayer.Steam then
+            return "Error: Multiplayer API unavailable."
+        end
+        local okSt, st = pcall(Crabe.Multiplayer.Steam.getLobbyStatus)
+        if not okSt or not st or not st.inLobby then
+            return "Not currently in a Steam lobby."
+        end
+        return string.format("In Lobby (%s) | %d/%d players (LobbyID: %s)",
+            st.isHost and "Host" or "Guest", st.memberCount or 1, st.memberLimit or 4, tostring(st.lobbyId or 0))
+    end,
+})
+
+Crabe.Menu.registerInCategory("Multiplayer", {
+    label = "Leave Steam Lobby",
+    action = function()
+        if not Crabe.Multiplayer or not Crabe.Multiplayer.Steam then
+            return "Error: Multiplayer API unavailable."
+        end
+        local ok = pcall(Crabe.Multiplayer.Steam.leaveLobby)
+        if ok then
+            return "Left Steam lobby."
+        else
+            return "Error: Failed to leave lobby."
+        end
+    end,
+})
+
+-- ---------------------------------------------------------------------------
+-- 8. 1-Click Local 2-Player Test (Same PC Loopback)
+-- ---------------------------------------------------------------------------
+
+Crabe.Menu.registerInCategory("Multiplayer", {
+    label = "[P1 - HOST] Prepare Local Session (Port 3074)",
+    action = function()
+        if not Crabe.Multiplayer then
+            return "Multiplayer module not loaded"
+        end
+        -- Set up DirectConnect so clients connecting to 127.0.0.1 find our session
+        Crabe.Multiplayer.setDirectConnect("LocalHost", "127.0.0.1", 3074)
+        if Crabe.Multiplayer.Steam and Crabe.Multiplayer.Steam.isAvailable() then
+            Crabe.Multiplayer.Steam.createLobby(true, 4)
+        end
+        return "Host Ready on 127.0.0.1:3074! (Now load Toybox)"
+    end,
+})
+
+Crabe.Menu.registerInCategory("Multiplayer", {
+    label = "[P2 - CLIENT] Connect to Local Host (127.0.0.1)",
+    action = function()
+        if not Crabe.Multiplayer then
+            return "Multiplayer module not loaded"
+        end
+        Crabe.Multiplayer.setDirectConnect("LocalHost", "127.0.0.1", 3074)
+        return "Target primed! Open Pause Menu -> Online MP / Friends -> Join LocalHost!"
+    end,
+})
+
