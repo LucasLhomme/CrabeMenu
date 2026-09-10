@@ -50,7 +50,7 @@ game_dir = Path(r'$gameDir')
 for sub in ['api', 'mods', 'characters']:
     p = game_dir / sub
     if not p.exists(): continue
-    for f in p.glob('*.lua'):
+    for f in p.rglob('*.lua'):
         data = f.read_bytes()
         if data.startswith(b'\xef\xbb\xbf'):
             f.write_bytes(data[3:])

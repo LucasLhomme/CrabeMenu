@@ -480,32 +480,205 @@ Crabe.Menu.registerInCategory("Multiplayer", {
 })
 
 -- ---------------------------------------------------------------------------
--- 8. 1-Click Local 2-Player Test (Same PC Loopback)
+-- 8. P2P Direct Multiplayer (Net-Z StandAloneLoop & Central Server)
 -- ---------------------------------------------------------------------------
 
+local function getSessionModule()
+    if _G.DisneyInfinityMP and _G.DisneyInfinityMP.Session then
+        return _G.DisneyInfinityMP.Session
+    end
+    local okEntry, dimp = pcall(require, "disneyinfinitymp")
+    if okEntry and dimp and dimp.Session then
+        return dimp.Session
+    end
+    local ok1, sess1 = pcall(require, "modules.session")
+    if ok1 and sess1 then return sess1 end
+    local ok2, sess2 = pcall(require, "disneyinfinitymp.modules.session")
+    if ok2 and sess2 then return sess2 end
+    return nil
+end
+
 Crabe.Menu.registerInCategory("Multiplayer", {
-    label = "[P1 - HOST] Prepare Local Session (Port 3074)",
+    label = "[P1 - HOST] Démarrer Hébergement ToyBox (Port 3074 UDP)",
     action = function()
-        if not Crabe.Multiplayer then
-            return "Multiplayer module not loaded"
+        local Session = getSessionModule()
+        if not Session then
+            return "Erreur: module DisneyInfinityMP.Session non disponible."
         end
-        -- Set up DirectConnect so clients connecting to 127.0.0.1 find our session
-        Crabe.Multiplayer.setDirectConnect("LocalHost", "127.0.0.1", 3074)
-        if Crabe.Multiplayer.Steam and Crabe.Multiplayer.Steam.isAvailable() then
-            Crabe.Multiplayer.Steam.createLobby(true, 4)
+        local ok = Session.hostToyBox()
+        if ok then
+            return "Hébergement lancé sur port 3074 UDP ! Chargement/rechargement du monde..."
+        else
+            return "Erreur: échec du lancement de l'hébergement ToyBox."
         end
-        return "Host Ready on 127.0.0.1:3074! (Now load Toybox)"
     end,
 })
 
 Crabe.Menu.registerInCategory("Multiplayer", {
-    label = "[P2 - CLIENT] Connect to Local Host (127.0.0.1)",
+    label = "[P2 - CLIENT] Connexion Directe LocalHost (127.0.0.1:3074)",
     action = function()
-        if not Crabe.Multiplayer then
-            return "Multiplayer module not loaded"
+        local Session = getSessionModule()
+        if not Session then
+            return "Erreur: module DisneyInfinityMP.Session non disponible."
         end
-        Crabe.Multiplayer.setDirectConnect("LocalHost", "127.0.0.1", 3074)
-        return "Target primed! Open Pause Menu -> Online MP / Friends -> Join LocalHost!"
+        local ok = Session.directConnect("127.0.0.1", 3074, "Host1")
+        if ok then
+            return "Connexion directe à 127.0.0.1:3074 lancée ! Chargement du niveau..."
+        else
+            return "Erreur: échec de la connexion à 127.0.0.1:3074."
+        end
+    end,
+})
+
+local customLanIp = "192.168.1.100"
+local lanSubnet = "192.168.1."
+local lanHostNum = 100
+
+local function getCustomLanIp()
+    local f = io.open("mods/target_ip.txt", "r") or io.open("target_ip.txt", "r")
+    if f then
+        local line = f:read("*l") or f:read("*a")
+        f:close()
+        if line then
+            local parsed = line:match("(%d+%.%d+%.%d+%.%d+)")
+            if parsed then
+                customLanIp = parsed
+                local sub, num = parsed:match("^(%d+%.%d+%.%d+%.)(%d+)$")
+                if sub and num then
+                    lanSubnet = sub
+                    lanHostNum = tonumber(num) or 100
+                end
+            end
+        end
+    end
+    return customLanIp
+end
+getCustomLanIp()
+
+local function buildLanSubmenu()
+    local curIp = customLanIp
+    local items = {}
+
+    table.insert(items, {
+        label = "-> Connexion Directe à " .. curIp .. ":3074",
+        action = function()
+            local Session = getSessionModule()
+            if not Session then
+                return "Erreur: module DisneyInfinityMP.Session indisponible."
+            end
+            local ok = Session.directConnect(curIp, 3074, "HostLAN")
+            if ok then
+                return string.format("Connexion directe à %s:3074 lancée ! Chargement...", curIp)
+            else
+                return string.format("Erreur: échec de la connexion à %s:3074.", curIp)
+            end
+        end,
+    })
+
+    table.insert(items, {
+        label = "IP Prédéfinies (Cycle rapide)",
+        cycle = { "192.168.1.100", "192.168.1.50", "192.168.1.20", "192.168.1.10", "192.168.1.2", "192.168.0.100", "192.168.0.50", "10.0.0.2" },
+        index = 1,
+        onCycle = function(val)
+            customLanIp = val
+            local sub, num = val:match("^(%d+%.%d+%.%d+%.)(%d+)$")
+            if sub and num then
+                lanSubnet = sub
+                lanHostNum = tonumber(num) or 100
+            end
+            return "IP cible définie: " .. val .. " (Réouvrir pour actualiser le libellé)"
+        end,
+    })
+
+    table.insert(items, {
+        label = "Sous-réseau (Préfixe)",
+        cycle = { "192.168.1.", "192.168.0.", "10.0.0.", "172.16.0." },
+        index = 1,
+        onCycle = function(val)
+            lanSubnet = val
+            customLanIp = lanSubnet .. tostring(lanHostNum)
+            return "Sous-réseau: " .. val .. " -> IP cible: " .. customLanIp
+        end,
+    })
+
+    table.insert(items, {
+        label = "Dernier octet: +10",
+        action = function()
+            lanHostNum = (lanHostNum + 10) % 255
+            if lanHostNum == 0 then lanHostNum = 1 end
+            customLanIp = lanSubnet .. tostring(lanHostNum)
+            return "IP cible ajustée: " .. customLanIp
+        end,
+    })
+
+    table.insert(items, {
+        label = "Dernier octet: +1",
+        action = function()
+            lanHostNum = (lanHostNum + 1) % 255
+            if lanHostNum == 0 then lanHostNum = 1 end
+            customLanIp = lanSubnet .. tostring(lanHostNum)
+            return "IP cible ajustée: " .. customLanIp
+        end,
+    })
+
+    table.insert(items, {
+        label = "Dernier octet: -1",
+        action = function()
+            lanHostNum = lanHostNum - 1
+            if lanHostNum < 1 then lanHostNum = 254 end
+            customLanIp = lanSubnet .. tostring(lanHostNum)
+            return "IP cible ajustée: " .. customLanIp
+        end,
+    })
+
+    table.insert(items, {
+        label = "Lire depuis mods/target_ip.txt",
+        action = function()
+            local ip = getCustomLanIp()
+            return "IP lue depuis fichier: " .. ip
+        end,
+    })
+
+    table.insert(items, {
+        label = "Sauvegarder dans mods/target_ip.txt",
+        action = function()
+            local f = io.open("mods/target_ip.txt", "w")
+            if f then
+                f:write(customLanIp)
+                f:close()
+                return "Sauvegardé: " .. customLanIp .. " dans mods/target_ip.txt"
+            end
+            return "Erreur d'écriture dans mods/target_ip.txt"
+        end,
+    })
+
+    return items
+end
+
+Crabe.Menu.registerInCategory("Multiplayer", {
+    label = "[P2 - CLIENT] Connexion Directe LAN (IP personnalisée)",
+    submenu = {
+        title = "CONNEXION DIRECTE LAN",
+        build = buildLanSubmenu,
+    },
+})
+
+Crabe.Menu.registerInCategory("Multiplayer", {
+    label = "[Central Server] Statut Serveur Central (Docker 127.0.0.1:3000)",
+    action = function()
+        local isOnline = false
+        if Crabe and Crabe.Multiplayer and Crabe.Multiplayer.checkServerReachability then
+            isOnline = Crabe.Multiplayer.checkServerReachability("127.0.0.1", 3000, 500)
+        elseif Crabe and Crabe.Multiplayer and Crabe.Multiplayer.getStatus then
+            local st = Crabe.Multiplayer.getStatus()
+            isOnline = st.isServerOnline
+        end
+
+        if isOnline then
+            return "Serveur Central Docker (127.0.0.1:3000) : EN LIGNE (Joignable) !"
+        else
+            return "Serveur Central Docker (127.0.0.1:3000) : HORS LIGNE (Non joignable)"
+        end
     end,
 })
 
