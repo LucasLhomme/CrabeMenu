@@ -682,3 +682,28 @@ Crabe.Menu.registerInCategory("Multiplayer", {
     end,
 })
 
+Crabe.Menu.registerInCategory("Multiplayer", {
+    label = "[Contrôles] Débloquer le Joueur & Pause (Unlock Controls)",
+    action = function()
+        if type(_G.Pause_UnPauseFromPausedScreenIfPaused) == "function" then
+            pcall(_G.Pause_UnPauseFromPausedScreenIfPaused, 0)
+        end
+        if type(_G.UnlockAllControls) == "function" then
+            pcall(_G.UnlockAllControls)
+        end
+        if type(_G.Players_UnlockAllControls) == "function" then
+            pcall(_G.Players_UnlockAllControls, "ProcessSwitchLevel")
+            pcall(_G.Players_UnlockAllControls, "LevelLoad")
+            pcall(_G.Players_UnlockAllControls, "ScriptLock")
+            pcall(_G.Players_UnlockAllControls, "SYSTEM_MENU")
+        end
+        if type(Game) == "table" and type(Game.UnlockAllControls) == "function" then
+            pcall(Game.UnlockAllControls)
+        end
+        if type(Game) == "table" and type(Game.UnlockAllControllers) == "function" then
+            pcall(Game.UnlockAllControllers)
+        end
+        return "Contrôles et pause débloqués ! Appuyez sur F5 pour fermer le menu."
+    end,
+})
+
