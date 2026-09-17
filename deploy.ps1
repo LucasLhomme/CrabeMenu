@@ -41,11 +41,24 @@ if (Test-Path $apiTarget) {
     Write-Host "[OK] Removed obsolete $apiTarget (API is embedded in bink2w32.dll)" -ForegroundColor Green
 }
 
-# 3. Sync Characters
-if (!(Test-Path $charsTarget)) { New-Item -ItemType Directory -Force -Path $charsTarget | Out-Null }
+# 3. Clean obsolete root folders (characters and skilltrees now live strictly inside mods/)
+if (Test-Path $charsTarget) {
+    Remove-Item -Path $charsTarget -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "[OK] Cleaned obsolete root $charsTarget" -ForegroundColor Green
+}
+$skilltreesTarget = Join-Path $gameDir "skilltrees"
+if (Test-Path $skilltreesTarget) {
+    Remove-Item -Path $skilltreesTarget -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "[OK] Cleaned obsolete root $skilltreesTarget" -ForegroundColor Green
+}
+
+# 4. Sync modular character pack under mods/crabe_heroes/
+$heroModDir = Join-Path $modsTarget "crabe_heroes"
+$heroModChars = Join-Path $heroModDir "characters"
+if (!(Test-Path $heroModChars)) { New-Item -ItemType Directory -Force -Path $heroModChars | Out-Null }
 if (Test-Path $loaderCharsSrc) {
-    Copy-Item -Path "$loaderCharsSrc\*.lua" -Destination $charsTarget -Force
-    Write-Host "[OK] Synced character modules -> $charsTarget" -ForegroundColor Green
+    Copy-Item -Path "$loaderCharsSrc\*.lua" -Destination $heroModChars -Force
+    Write-Host "[OK] Synced characters -> $heroModChars" -ForegroundColor Green
 }
 
 # 4. Strip BOM from all deployed Lua files
