@@ -778,163 +778,162 @@ Crabe.Menu.registerInCategory("Cheats", {
 })
 
 local isMenuOpen = false
+local menuCursor = 1
+local menuScrollTo = false
+local lastFrame = nil
 
-if Crabe and Crabe.Input and Crabe.Input.bindKey then
-    Crabe.Input.bindKey(0x74, function()
-        isMenuOpen = not isMenuOpen
-    end)
-elseif Crabe and Crabe.Events and Crabe.Events.on then
+-- Arrows, Enter, Backspace, PageUp/Down, Home/End, Esc. The game keeps re-centring
+-- the mouse every frame, so the pointer cannot be trusted to sit on a row.
+local NAV_KEYS = { 0x26, 0x28, 0x25, 0x27, 0x0D, 0x08, 0x21, 0x22, 0x24, 0x23, 0x1B }
+
+--- Returns the menu currently on top of the navigation stack.
+local function currentMenu()
+    local stack = Crabe.Menu and Crabe.Menu.stack
+    local frame = stack and stack[#stack]
+    return frame and frame.menu or nil
+end
+
+--- Builds the display label of one entry, suffixed with its state.
+local function entryLabel(item)
+    local suffix = ""
+    if item.submenu then
+        suffix = "  >"
+    elseif item.toggle then
+        suffix = item.state and "  [ON]" or "  [OFF]"
+    elseif item.cycle then
+        suffix = "  [" .. tostring(item.cycle[item.index or 1]) .. "]"
+    end
+    return tostring(item.label) .. suffix
+end
+
+--- Moves the highlighted row, wrapping around both ends.
+local function moveCursor(delta, count)
+    if count < 1 then return end
+    menuCursor = (menuCursor - 1 + delta) % count + 1
+    menuScrollTo = true
+end
+
+--- Opens or closes the menu, taking the navigation keys away from the game
+--- while it is up so that arrows do not also steer the player.
+local function setMenuOpen(open)
+    isMenuOpen = open
+    if Crabe.Input and Crabe.Input.captureKeys then
+        Crabe.Input.captureKeys(open and NAV_KEYS or nil)
+    end
+end
+
+--- Applies one navigation key press to the menu.
+local function onNavKey(vk)
+    if not isMenuOpen or not Crabe.Menu then return end
+
+    local menu = currentMenu()
+    local count = (menu and menu.items) and #menu.items or 0
+    if count < 1 then return end
+
+    if menuCursor > count then menuCursor = count end
+
+    local stack = Crabe.Menu.stack
+    local frame = stack and stack[#stack]
+
+    if vk == 0x28 then
+        moveCursor(1, count)
+        if frame then frame.index = menuCursor end
+    elseif vk == 0x26 then
+        moveCursor(-1, count)
+        if frame then frame.index = menuCursor end
+    elseif vk == 0x22 then
+        moveCursor(5, count)
+        if frame then frame.index = menuCursor end
+    elseif vk == 0x21 then
+        moveCursor(-5, count)
+        if frame then frame.index = menuCursor end
+    elseif vk == 0x24 then
+        menuCursor, menuScrollTo = 1, true
+        if frame then frame.index = menuCursor end
+    elseif vk == 0x23 then
+        menuCursor, menuScrollTo = count, true
+        if frame then frame.index = menuCursor end
+    elseif vk == 0x0D or vk == 0x27 then
+        Crabe.Menu._activate(menuCursor)
+    elseif vk == 0x08 or vk == 0x25 then
+        Crabe.Menu._back()
+    elseif vk == 0x1B then
+        if stack and #stack > 1 then
+            Crabe.Menu._back()
+        else
+            setMenuOpen(false)
+        end
+    end
+end
+
+if Crabe and Crabe.Events and Crabe.Events.on then
     Crabe.Events.on("keyDown", function(vk)
         if vk == 0x74 then
-            isMenuOpen = not isMenuOpen
+            setMenuOpen(not isMenuOpen)
+        else
+            onNavKey(vk)
         end
     end)
 end
-
-local selectedCategoryIndex = 1
 
 --- Renders the complete CrabeMenu ImGui interface.
 local function renderImGuiMenu()
     if not isMenuOpen or not ImGui then return end
 
     if ImGui.SetNextWindowSize then
-        ImGui.SetNextWindowSize(520, 580, 4)
+        ImGui.SetNextWindowSize(360, 420, 4)
     end
 
-    local visible = ImGui.Begin("CrabeMenu - Disney Infinity 3.0 (F5)", true)
+    local visible = ImGui.Begin("Crabe Menu", true)
     if not visible then
         ImGui.End()
         return
     end
 
-    local root = Crabe.Menu and Crabe.Menu.root
-    if not root or not root.items or #root.items == 0 then
-        ImGui.Text("No menu items registered.")
+    local menu = currentMenu()
+    if not menu or not menu.items or #menu.items == 0 then
+        ImGui.TextDisabled("No mod has registered a menu entry.")
+        ImGui.TextDisabled("Mods declare them with Crabe.Menu.register{...}.")
         ImGui.End()
         return
     end
 
-    Crabe.Menu.stack = Crabe.Menu.stack or { { menu = root, index = 1 } }
+    ImGui.Text(tostring(menu.title or "CRABE MENU"))
+    ImGui.Separator()
 
-    if #Crabe.Menu.stack > 1 then
-        local currentFrame = Crabe.Menu.stack[#Crabe.Menu.stack]
-        local currentTitle = (currentFrame.menu and currentFrame.menu.title) or "SUBMENU"
-        if ImGui.Button("<- Back") then
-            table.remove(Crabe.Menu.stack)
-        end
-        ImGui.SameLine()
-        if ImGui.TextColored then
-            ImGui.TextColored(1.0, 0.8, 0.2, 1.0, currentTitle)
-        else
-            ImGui.Text(currentTitle)
-        end
-        ImGui.Separator()
+    local count = #menu.items
+    local stack = Crabe.Menu and Crabe.Menu.stack
+    local frame = stack and stack[#stack]
+    if frame ~= lastFrame then
+        lastFrame = frame
+        menuCursor = (frame and frame.index) or 1
+        menuScrollTo = true
+    end
+    if menuCursor > count then menuCursor = count end
+    if menuCursor < 1 then menuCursor = 1 end
 
-        local activeMenu = currentFrame.menu
-        local items = activeMenu and activeMenu.items or {}
-        for j, item in ipairs(items) do
-            local itemLabel = item.label or ("Item " .. j)
-            if item.submenu then
-                if ImGui.Button("> " .. itemLabel) then
-                    if item.submenu.items and #item.submenu.items > 0 then
-                        Crabe.Menu.stack[#Crabe.Menu.stack + 1] = { menu = item.submenu, index = 1 }
-                    end
-                end
-            elseif item.toggle then
-                local text = itemLabel .. (item.state and " [ON]" or " [OFF]")
-                if ImGui.Button(text) then
-                    item.state = not item.state
-                    if item.onToggle then
-                        local res = item.onToggle(item.state)
-                        if res then Crabe.Menu.status = tostring(res) end
-                    end
-                end
-            elseif item.cycle then
-                local text = itemLabel .. " [" .. tostring(item.cycle[item.index or 1]) .. "]"
-                if ImGui.Button(text) then
-                    item.index = ((item.index or 1) % #item.cycle) + 1
-                    if item.onCycle then
-                        local res = item.onCycle(item.cycle[item.index], item.index)
-                        if res then Crabe.Menu.status = tostring(res) end
-                    end
-                end
-            else
-                if ImGui.Button(itemLabel) then
-                    if item.action then
-                        local res = item.action()
-                        if res then Crabe.Menu.status = tostring(res) end
-                    end
-                end
-            end
+    ImGui.BeginChild("MenuScroll", 0, -56, false, 0)
+    for i, item in ipairs(menu.items) do
+        local selected = (i == menuCursor)
+        if ImGui.Selectable(entryLabel(item), selected) then
+            menuCursor = i
+            if frame then frame.index = i end
+            Crabe.Menu._activate(i)
         end
-    else
-        for i, cat in ipairs(root.items) do
-            local tabLabel = cat.label or ("Cat " .. i)
-            local isSel = (selectedCategoryIndex == i)
-            local btnText = isSel and ("[" .. tabLabel .. "]") or tabLabel
-            if ImGui.Button(btnText) then
-                selectedCategoryIndex = i
-            end
-            if i < #root.items and (i % 4 ~= 0) then
-                ImGui.SameLine()
-            end
-        end
-        ImGui.Separator()
-
-        local cat = root.items[selectedCategoryIndex]
-        if cat then
-            local items = (cat.submenu and cat.submenu.items) or {}
-            for j, item in ipairs(items) do
-                local itemLabel = item.label or ("Item " .. j)
-                if item.submenu then
-                    if ImGui.Button("> " .. itemLabel) then
-                        if item.submenu.items and #item.submenu.items > 0 then
-                            Crabe.Menu.stack[#Crabe.Menu.stack + 1] = { menu = item.submenu, index = 1 }
-                        end
-                    end
-                elseif item.toggle then
-                    local text = itemLabel .. (item.state and " [ON]" or " [OFF]")
-                    if ImGui.Button(text) then
-                        item.state = not item.state
-                        if item.onToggle then
-                            local res = item.onToggle(item.state)
-                            if res then Crabe.Menu.status = tostring(res) end
-                        end
-                    end
-                elseif item.cycle then
-                    local text = itemLabel .. " [" .. tostring(item.cycle[item.index or 1]) .. "]"
-                    if ImGui.Button(text) then
-                        item.index = ((item.index or 1) % #item.cycle) + 1
-                        if item.onCycle then
-                            local res = item.onCycle(item.cycle[item.index], item.index)
-                            if res then Crabe.Menu.status = tostring(res) end
-                        end
-                    end
-                else
-                    if ImGui.Button(itemLabel) then
-                        if item.action then
-                            local res = item.action()
-                            if res then Crabe.Menu.status = tostring(res) end
-                        end
-                    end
-                end
-            end
-            if cat.action then
-                if ImGui.Button(cat.label) then
-                    local res = cat.action()
-                    if res then Crabe.Menu.status = tostring(res) end
-                end
-            end
+        if selected and menuScrollTo then
+            ImGui.SetScrollHereY(0.5)
         end
     end
+    menuScrollTo = false
+    ImGui.EndChild()
 
-    if Crabe.Menu and Crabe.Menu.status and Crabe.Menu.status ~= "" then
-        ImGui.Separator()
-        if ImGui.TextColored then
-            ImGui.TextColored(0.2, 0.8, 1.0, 1.0, Crabe.Menu.status)
-        else
-            ImGui.Text(Crabe.Menu.status)
-        end
+    ImGui.Separator()
+
+    local status = Crabe.Menu and Crabe.Menu.status
+    if status and status ~= "" then
+        ImGui.Text(tostring(status))
+    else
+        ImGui.TextDisabled("Arrows move  -  Enter selects  -  Backspace goes back")
     end
 
     ImGui.End()
@@ -961,7 +960,7 @@ if Crabe and Crabe.Mod and Crabe.Mod.register then
             renderImGuiMenu()
         end,
         onShutdown = function()
-            isMenuOpen = false
+            setMenuOpen(false)
         end
     })
 end
