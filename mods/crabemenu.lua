@@ -707,10 +707,6 @@ Crabe.Menu.registerInCategory("Multiplayer", {
     end,
 })
 
--- ---------------------------------------------------------------------------
--- 6. Engine Memory Patches (Toy Box Editor Everywhere)
--- ---------------------------------------------------------------------------
-
 Crabe.Menu.registerInCategory("Cheats", {
     label = "Unlock Toy Box Editor Everywhere (PlaySets)",
     action = function()
@@ -726,14 +722,10 @@ Crabe.Menu.registerInCategory("Cheats", {
     end
 })
 
--- ---------------------------------------------------------------------------
--- 7. ImGui In-Game Interface (Rendered via onDraw in DirectX 11)
--- ---------------------------------------------------------------------------
-
 local isMenuOpen = false
 
 if Crabe and Crabe.Input and Crabe.Input.bindKey then
-    Crabe.Input.bindKey(0x74, function() -- VK_F5
+    Crabe.Input.bindKey(0x74, function()
         isMenuOpen = not isMenuOpen
     end)
 elseif Crabe and Crabe.Events and Crabe.Events.on then
