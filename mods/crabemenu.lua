@@ -707,3 +707,136 @@ Crabe.Menu.registerInCategory("Multiplayer", {
     end,
 })
 
+-- ---------------------------------------------------------------------------
+-- 6. Engine Memory Patches (Toy Box Editor Everywhere)
+-- ---------------------------------------------------------------------------
+
+Crabe.Menu.registerInCategory("Cheats", {
+    label = "Unlock Toy Box Editor Everywhere (PlaySets)",
+    action = function()
+        if not (Crabe and Crabe.Memory and Crabe.Memory.patternScan and Crabe.Memory.patchBytes) then
+            return "Crabe.Memory is not available"
+        end
+        local addr = Crabe.Memory.patternScan("0F B6 42 20 85 C0 74")
+        if not addr then
+            return "Pattern not found (already unlocked or incompatible build)"
+        end
+        local ok = Crabe.Memory.patchBytes(addr + 6, "90 90")
+        return ok and "Toy Box Editor unlocked everywhere!" or "Failed to patch memory"
+    end
+})
+
+-- ---------------------------------------------------------------------------
+-- 7. ImGui In-Game Interface (Rendered via onDraw in DirectX 11)
+-- ---------------------------------------------------------------------------
+
+local isMenuOpen = false
+
+if Crabe and Crabe.Input and Crabe.Input.bindKey then
+    Crabe.Input.bindKey(0x74, function() -- VK_F5
+        isMenuOpen = not isMenuOpen
+    end)
+elseif Crabe and Crabe.Events and Crabe.Events.on then
+    Crabe.Events.on("keyDown", function(vk)
+        if vk == 0x74 then
+            isMenuOpen = not isMenuOpen
+        end
+    end)
+end
+
+local function renderImGuiMenu()
+    if not isMenuOpen or not ImGui then return end
+
+    if ImGui.SetNextWindowSize then
+        ImGui.SetNextWindowSize(500, 560, 4) -- ImGuiCond_FirstUseEver = 4
+    end
+
+    local visible = ImGui.Begin("CrabeMenu - Disney Infinity 3.0 (F5)", true)
+    if not visible then
+        ImGui.End()
+        return
+    end
+
+    if ImGui.BeginTabBar and ImGui.BeginTabBar("CrabeMenuTabs") then
+        local root = Crabe.Menu and Crabe.Menu.root
+        if root and root.items then
+            for i, cat in ipairs(root.items) do
+                local tabLabel = cat.label or ("Cat " .. i)
+                if ImGui.BeginTabItem(tabLabel) then
+                    if cat.submenu and cat.submenu.items then
+                        for j, item in ipairs(cat.submenu.items) do
+                            local itemLabel = item.label or ("Item " .. j)
+                            if item.submenu then
+                                if ImGui.Button("> " .. itemLabel) then
+                                    if item.submenu.items and #item.submenu.items > 0 then
+                                        Crabe.Menu.stack[#Crabe.Menu.stack + 1] = { menu = item.submenu, index = 1 }
+                                    end
+                                end
+                            elseif item.toggle then
+                                local text = itemLabel .. (item.state and " [ON]" or " [OFF]")
+                                if ImGui.Button(text) then
+                                    item.state = not item.state
+                                    if item.onToggle then
+                                        local res = item.onToggle(item.state)
+                                        if res then Crabe.Menu.status = tostring(res) end
+                                    end
+                                end
+                            elseif item.cycle then
+                                local text = itemLabel .. " [" .. tostring(item.cycle[item.index or 1]) .. "]"
+                                if ImGui.Button(text) then
+                                    item.index = ((item.index or 1) % #item.cycle) + 1
+                                    if item.onCycle then
+                                        local res = item.onCycle(item.cycle[item.index], item.index)
+                                        if res then Crabe.Menu.status = tostring(res) end
+                                    end
+                                end
+                            else
+                                if ImGui.Button(itemLabel) then
+                                    if item.action then
+                                        local res = item.action()
+                                        if res then Crabe.Menu.status = tostring(res) end
+                                    end
+                                end
+                            end
+                        end
+                    elseif cat.action then
+                        if ImGui.Button(tabLabel) then
+                            local res = cat.action()
+                            if res then Crabe.Menu.status = tostring(res) end
+                        end
+                    end
+                    ImGui.EndTabItem()
+                end
+            end
+        end
+        ImGui.EndTabBar()
+    end
+
+    if Crabe.Menu and Crabe.Menu.status and Crabe.Menu.status ~= "" then
+        ImGui.Separator()
+        if ImGui.TextColored then
+            ImGui.TextColored(0.2, 0.8, 1.0, 1.0, Crabe.Menu.status)
+        else
+            ImGui.TextUnformatted(Crabe.Menu.status)
+        end
+    end
+
+    ImGui.End()
+end
+
+if Crabe and Crabe.Mod and Crabe.Mod.register then
+    Crabe.Mod.register({
+        id = "crabemenu",
+        name = "CrabeMenu",
+        onInit = function()
+            if Crabe and Crabe.write then
+                Crabe.write("[CrabeMenu] Master mod initialized (press F5 to toggle in-game menu).")
+            end
+        end,
+        onDraw = function()
+            renderImGuiMenu()
+        end
+    })
+end
+
+

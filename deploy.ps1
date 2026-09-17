@@ -13,27 +13,32 @@ if (!(Test-Path $gameDir)) {
 }
 
 # 0. Sync C++ Proxy DLL
-$dllSrc = "E:\Dev\DIM2\CrabeLoader\build\Release\bink2w32.dll"
-if (Test-Path $dllSrc) {
+$dllCandidates = @(
+    "E:\Dev\DIM2\CrabeLoader\build\vs2022-dll\Release\bink2w32.dll",
+    "E:\Dev\DIM2\CrabeLoader\Release\bink2w32.dll",
+    "E:\Dev\DIM2\CrabeLoader\build\Release\bink2w32.dll"
+)
+$dllSrc = $dllCandidates | Where-Object { Test-Path $_ } | Sort-Object { (Get-Item $_).LastWriteTime } -Descending | Select-Object -First 1
+if ($dllSrc) {
     Copy-Item -Path $dllSrc -Destination "$gameDir\bink2w32.dll" -Force
-    Write-Host "[OK] bink2w32.dll -> $gameDir" -ForegroundColor Green
+    Write-Host "[OK] bink2w32.dll ($dllSrc) -> $gameDir" -ForegroundColor Green
+} else {
+    Write-Warning "No bink2w32.dll found to deploy!"
 }
 
 # 1. Sync mods
 if (!(Test-Path $modsTarget)) { New-Item -ItemType Directory -Force -Path $modsTarget | Out-Null }
 Copy-Item -Path "E:\Dev\DIM2\CrabeMenu\mods\crabemenu.lua" -Destination "$modsTarget\crabemenu.lua" -Force
 Write-Host "[OK] crabemenu.lua -> $modsTarget" -ForegroundColor Green
-
-# 2. Sync API files
-if (!(Test-Path $apiTarget)) { New-Item -ItemType Directory -Force -Path $apiTarget | Out-Null }
-if (Test-Path $apiTarget) {
-    Remove-Item -Path "$apiTarget\*.lua" -Force -ErrorAction SilentlyContinue
-} else {
-    New-Item -ItemType Directory -Force -Path $apiTarget | Out-Null
+if (Test-Path "E:\Dev\DIM2\CrabeLoader\mods\window_mode.lua") {
+    Copy-Item -Path "E:\Dev\DIM2\CrabeLoader\mods\window_mode.lua" -Destination "$modsTarget\window_mode.lua" -Force
+    Write-Host "[OK] window_mode.lua -> $modsTarget" -ForegroundColor Green
 }
-if (Test-Path $loaderApiSrc) {
-    Copy-Item -Path "$loaderApiSrc\*.lua" -Destination $apiTarget -Force
-    Write-Host "[OK] Synced all API modules -> $apiTarget" -ForegroundColor Green
+
+# 2. Clean obsolete api folder (API is now directly embedded into bink2w32.dll)
+if (Test-Path $apiTarget) {
+    Remove-Item -Path $apiTarget -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Host "[OK] Removed obsolete $apiTarget (API is embedded in bink2w32.dll)" -ForegroundColor Green
 }
 
 # 3. Sync Characters
@@ -47,7 +52,7 @@ if (Test-Path $loaderCharsSrc) {
 python -c "
 from pathlib import Path
 game_dir = Path(r'$gameDir')
-for sub in ['api', 'mods', 'characters']:
+for sub in ['mods', 'characters']:
     p = game_dir / sub
     if not p.exists(): continue
     for f in p.rglob('*.lua'):
