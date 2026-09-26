@@ -983,9 +983,10 @@ local function renderImGuiMenu()
         ImGui.SetNextWindowSize(380, 440, 4)
     end
 
-    -- ImGuiWindowFlags_NoNav = 196608 (NoNavInputs 65536 | NoNavFocus 131072):
-    -- Prevents Dear ImGui's internal navigation system from competing with Lua's cursor.
-    local visible, open = ImGui.Begin("Crabe Menu", true, 196608)
+    -- ImGuiWindowFlags_NoInputs = 197120 (NoMouseInputs 512 | NoNavInputs 65536 | NoNavFocus 131072)
+    -- Guarantees pure keyboard/gamepad navigation with zero mouse-hover or nav-focus side effects.
+    local WINDOW_FLAGS = 197120
+    local visible, open = ImGui.Begin("Crabe Menu", true, WINDOW_FLAGS)
     if open == false then
         setMenuOpen(false)
         ImGui.End()
@@ -1023,10 +1024,7 @@ local function renderImGuiMenu()
     if menuCursor > count then menuCursor = count end
     if menuCursor < 1 then menuCursor = 1 end
 
-    -- ImGuiWindowFlags_NoInputs = 197120 (NoMouseInputs 512 | NoNavInputs 65536 | NoNavFocus 131072):
-    -- Completely eliminates mouse hover, ghost clicks, and internal ImGui nav box highlights.
-    -- Selection is 100% controlled by Lua menuCursor.
-    ImGui.BeginChild("MenuScroll", 0, -56, false, 197120)
+    ImGui.BeginChild("MenuScroll", 0, -56, false, WINDOW_FLAGS)
     for i, item in ipairs(menu.items) do
         local isCurrent = (i == menuCursor)
         local prefix = isCurrent and "> " or "  "
