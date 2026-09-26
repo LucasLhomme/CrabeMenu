@@ -28,8 +28,20 @@ if ($dllSrc) {
 
 # 1. Sync mods
 if (!(Test-Path $modsTarget)) { New-Item -ItemType Directory -Force -Path $modsTarget | Out-Null }
-Copy-Item -Path "E:\Dev\DIM2\CrabeMenu\mods\crabemenu.lua" -Destination "$modsTarget\crabemenu.lua" -Force
-Write-Host "[OK] crabemenu.lua -> $modsTarget" -ForegroundColor Green
+# CrabeMenu is a folder mod: mods\crabemenu\ mirrors this folder's mod files.
+$menuTarget = Join-Path $modsTarget "crabemenu"
+if (Test-Path $menuTarget) { Remove-Item -Path $menuTarget -Recurse -Force }
+New-Item -ItemType Directory -Force -Path $menuTarget | Out-Null
+foreach ($item in @("mod.json", "main.lua")) {
+    Copy-Item -Path (Join-Path $PSScriptRoot $item) -Destination $menuTarget -Force
+}
+Write-Host "[OK] CrabeMenu -> $menuTarget" -ForegroundColor Green
+# The former single-file layout would load the menu a second time.
+$legacyMenu = Join-Path $modsTarget "crabemenu.lua"
+if (Test-Path $legacyMenu) {
+    Remove-Item -Path $legacyMenu -Force
+    Write-Host "[OK] Removed legacy $legacyMenu" -ForegroundColor Green
+}
 if (Test-Path "E:\Dev\DIM2\CrabeLoader\mods\window_mode.lua") {
     Copy-Item -Path "E:\Dev\DIM2\CrabeLoader\mods\window_mode.lua" -Destination "$modsTarget\window_mode.lua" -Force
     Write-Host "[OK] window_mode.lua -> $modsTarget" -ForegroundColor Green

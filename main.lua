@@ -2,77 +2,188 @@ Crabe = Crabe or {}
 Crabe.Menu = Crabe.Menu or {}
 Crabe.Cheats = Crabe.Cheats or {}
 Crabe.GameSpeed = Crabe.GameSpeed or {}
-Crabe.Freecam = Crabe.Freecam or {}
 
-local isGodModeActive = false
+-- God mode: two code caves share one data block with this script.
+--   damage cave (apply-health-delta, esi = health component, [ebp+8] = delta):
+--     records the last component that lost health; when enabled and esi is the
+--     player, the new health becomes maxHealth ([esi+0Ch]) instead.
+--   HUD cave (health meter fill, eax = component): writes every drawn component
+--     into a 64-slot ring. The avatar meter is drawn every frame, an enemy meter
+--     only while engaged, so the most frequent component is the player.
+-- Health component layout: float health at +08h, float maxHealth at +0Ch.
+local GOD_MAGIC = 0x474F4431
+local GOD_OFF = { magic = 0x00, enabled = 0x04, player = 0x08, lastDamaged = 0x0C, ringIndex = 0x10, ring = 0x20 }
+local GOD_RING = 64
+local GOD_DAMAGE_PATTERN = "F3 0F 58 45 08 F3 0F 10 4E 0C 0F 2F C1 57 F3 0F 11 46 08"
+local GOD_DAMAGE_SITE = 5
+local GOD_HUD_PATTERN = "85 C0 0F 84 ?? ?? ?? ?? F3 0F 10 40 08 F3 0F 5E 40 0C 0F 2F C8"
+local GOD_HUD_SITE = 8
+
+local godBlock = nil
+local godLocked = false
+local godTicks = 0
+
+local function le32(value)
+    local b = {}
+    for i = 1, 4 do
+        b[i] = string.format("%02X", value % 256)
+        value = math.floor(value / 256)
+    end
+    return table.concat(b, " ")
+end
+
+local function installGodCaves()
+    if godBlock then return true end
+    local block = Crabe.Memory.sharedBlock("crabemenu.godmode", GOD_OFF.ring + GOD_RING * 4)
+    if not block then
+        print("[GodMode] shared block unavailable (loader too old?)")
+        return false
+    end
+    if Crabe.Memory.readU32(block + GOD_OFF.magic) == GOD_MAGIC then
+        godBlock = block
+        return true
+    end
+
+    local damage = Crabe.Memory.patternScan(GOD_DAMAGE_PATTERN)
+    local hud = Crabe.Memory.patternScan(GOD_HUD_PATTERN)
+    if not damage or not hud then
+        print(string.format("[GodMode] sites not found (damage=%s, hud=%s)", tostring(damage), tostring(hud)))
+        return false
+    end
+
+    local damageBody = table.concat({
+        "F6 45 0B 80",                                      -- test byte ptr [ebp+0Bh], 80h (is delta negative?)
+        "74 06",                                            -- jz +6 (skip lastDamaged)
+        "89 35 " .. le32(block + GOD_OFF.lastDamaged),      -- mov [lastDamaged], esi
+        "80 3D " .. le32(block + GOD_OFF.enabled) .. " 00", -- cmp byte ptr [enabled], 0
+        "74 1C",                                            -- jz +1Ch (exit)
+        "83 3D " .. le32(block + GOD_OFF.player) .. " 00",  -- cmp dword ptr [player], 0
+        "75 06",                                            -- jne +6 (check_match)
+        "89 35 " .. le32(block + GOD_OFF.player),           -- mov [player], esi (auto-adopt player on first hit!)
+        "3B 35 " .. le32(block + GOD_OFF.player),           -- cmp esi, [player]
+        "75 05",                                            -- jne +5 (exit)
+        "F3 0F 10 46 0C",                                   -- movss xmm0, dword ptr [esi+0Ch] (overwrite new health with maxHealth!)
+    }, " ")
+    local hudBody = table.concat({
+        "51",
+        "8B 0D " .. le32(block + GOD_OFF.ringIndex),
+        "83 E1 3F",
+        "89 04 8D " .. le32(block + GOD_OFF.ring),
+        "41",
+        "89 0D " .. le32(block + GOD_OFF.ringIndex),
+        "59",
+    }, " ")
+
+    if not Crabe.Memory.installCodeCave(damage + GOD_DAMAGE_SITE, damageBody, 5) then
+        print("[GodMode] damage cave install failed")
+        return false
+    end
+    if not Crabe.Memory.installCodeCave(hud + GOD_HUD_SITE, hudBody, 5) then
+        print("[GodMode] HUD cave install failed")
+    end
+    Crabe.Memory.writeU32(block + GOD_OFF.magic, GOD_MAGIC)
+    godBlock = block
+    print(string.format("[GodMode] caves installed (damage 0x%X, hud 0x%X, block 0x%X)",
+        damage + GOD_DAMAGE_SITE, hud + GOD_HUD_SITE, block))
+    return true
+end
+
+local function isHealthComponent(address)
+    if not address or address == 0 then return false end
+    local maxHealth = Crabe.Memory.readFloat(address + 0x0C)
+    return maxHealth ~= nil and maxHealth > 0 and maxHealth < 1e7
+end
+
+local function pickPlayerComponent()
+    local counts, best, bestCount = {}, nil, 0
+    for i = 0, GOD_RING - 1 do
+        local p = Crabe.Memory.readU32(godBlock + GOD_OFF.ring + i * 4)
+        if p and p ~= 0 then
+            local c = (counts[p] or 0) + 1
+            counts[p] = c
+            if c > bestCount then best, bestCount = p, c end
+        end
+    end
+    if best and isHealthComponent(best) then return best end
+    return nil
+end
+
+local function refillPlayer()
+    local p = Crabe.Memory.readU32(godBlock + GOD_OFF.player)
+    if isHealthComponent(p) then
+        Crabe.Memory.writeFloat(p + 0x08, Crabe.Memory.readFloat(p + 0x0C))
+    end
+end
+
+Game.onTick(function()
+    if not godBlock then return end
+    godTicks = godTicks + 1
+    if not godLocked then
+        local currentPlayer = Crabe.Memory.readU32(godBlock + GOD_OFF.player)
+        if currentPlayer == 0 or godTicks % 15 == 0 then
+            local p = pickPlayerComponent()
+            if p and p ~= currentPlayer then
+                Crabe.Memory.writeU32(godBlock + GOD_OFF.player, p)
+            end
+        end
+    end
+    if Crabe.Memory.readU32(godBlock + GOD_OFF.enabled) ~= 0 then
+        refillPlayer()
+    end
+end)
 
 --- Sets god mode invulnerability state.
 function Crabe.Cheats.setGodMode(enabled)
-    isGodModeActive = enabled
-    if isGodModeActive then
-        local p = (type(Game) == "table" and type(Game.GetLocalPlayer) == "function") and Game.GetLocalPlayer()
-        if p and type(Game.SetPlayerHealth) == "function" then
-            pcall(Game.SetPlayerHealth, p, 9999.0)
+    if not installGodCaves() then return false end
+    Crabe.Memory.writeU32(godBlock + GOD_OFF.enabled, enabled and 1 or 0)
+    if enabled then
+        local p = pickPlayerComponent()
+        if p then
+            Crabe.Memory.writeU32(godBlock + GOD_OFF.player, p)
         end
+        refillPlayer()
     end
-    return isGodModeActive
+    return true
 end
 
 --- Returns whether god mode is currently enabled.
 function Crabe.Cheats.isGodMode()
-    return isGodModeActive
+    return godBlock ~= nil and Crabe.Memory.readU32(godBlock + GOD_OFF.enabled) ~= 0
 end
 
---- Locks to the last damaged entity.
+--- Pins god mode to the last component that lost health; returns its address (0 if none yet).
 function Crabe.Cheats.lockToLastDamaged()
-    return 0
+    if not installGodCaves() then return 0 end
+    local last = Crabe.Memory.readU32(godBlock + GOD_OFF.lastDamaged) or 0
+    if last ~= 0 then
+        Crabe.Memory.writeU32(godBlock + GOD_OFF.player, last)
+        godLocked = true
+    end
+    return last
 end
 
---- Tracks player movement position.
-function Crabe.Cheats.trackPosition()
-    return true
+--- Returns to automatic player detection after lockToLastDamaged.
+function Crabe.Cheats.unlockGodTarget()
+    godLocked = false
 end
 
---- Returns player position coordinates.
-function Crabe.Cheats.position()
-    return 0, 0, 0
+if Crabe.Memory.sharedBlock then
+    local block = Crabe.Memory.sharedBlock("crabemenu.godmode", GOD_OFF.ring + GOD_RING * 4)
+    if block and Crabe.Memory.readU32(block + GOD_OFF.magic) == GOD_MAGIC then
+        godBlock = block
+        Crabe.Memory.writeU32(block + GOD_OFF.enabled, 0)
+    end
 end
-
---- Teleports player upwards by delta Y.
-function Crabe.Cheats.teleportUp(dy)
-    return false
-end
-
---- Teleports player forward by distance.
-function Crabe.Cheats.teleportForward(dist)
-    return false
-end
-
-local simulationSpeeds = { 0.25, 0.5, 1.0, 1.5, 2.0, 5.0 }
-local currentSpeedIdx = 3
-
---- Cycles through simulation speeds.
-function Crabe.GameSpeed.cycle()
-    currentSpeedIdx = (currentSpeedIdx % #simulationSpeeds) + 1
-    return simulationSpeeds[currentSpeedIdx]
-end
-
---- Resets simulation speed to normal.
-function Crabe.GameSpeed.reset()
-    currentSpeedIdx = 3
-    return 1.0
-end
-
-
-Crabe.Menu.registerInCategory("Heroes", {
-    label = "Avatar Status Summary",
-    action = function() return Game.GetAvatarSummary() end,
-})
 
 local applyRoute = "loadout"
 
 local function buildCharacterItems(franchise)
     local chars = Game.ListCharacters(franchise)
+    if not chars or #chars == 0 then
+        return {
+            { label = "(No characters found)", action = function() return "No characters available in this category" end }
+        }
+    end
     local items = {}
 
     local PAGE_SIZE = 14
@@ -108,7 +219,12 @@ local function buildCharacterItems(franchise)
 end
 
 Crabe.Menu.registerInCategory("Heroes", {
-    label = "Swap Character Model (104 Heroes)",
+    label = "Avatar Status Summary",
+    action = function() return Game.GetAvatarSummary() end,
+})
+
+Crabe.Menu.registerInCategory("Heroes", {
+    label = "Swap Character Model",
     submenu = {
         title = "HEROES & COMBAT",
         items = {
@@ -121,6 +237,7 @@ Crabe.Menu.registerInCategory("Heroes", {
                     return "Apply method set to: " .. v
                 end,
             },
+            { label = "★ Custom / Modded Characters", submenu = { title = "CUSTOM CHARACTERS", items = buildCharacterItems("custom") } },
             { label = "Star Wars (Jedi/Sith Sabers)", submenu = { title = "STAR WARS", items = buildCharacterItems("starwars") } },
             { label = "Marvel Superheroes", submenu = { title = "MARVEL", items = buildCharacterItems("marvel") } },
             { label = "Disney & Pixar Characters", submenu = { title = "DISNEY", items = buildCharacterItems("disney") } },
@@ -159,137 +276,125 @@ Crabe.Menu.registerInCategory("Heroes", {
 })
 
 -- ---------------------------------------------------------------------------
--- 2. 6-DOF Free Camera & Flight Engine (C++23 Native Freecam)
+-- 2. Free camera (the engine's own) & leaving the world
 -- ---------------------------------------------------------------------------
 
-Crabe.Menu.registerInCategory("Freecam & NoClip", {
-    label = "6-DOF Free Camera (Fly & Look)",
+-- Hot reload keeps the menu tree, and this category used to be called
+-- "Freecam & NoClip": take that entry over in place and drop any duplicate,
+-- so no stale button from the old name stays on screen.
+do
+    local items = Crabe.Menu.root.items
+    local old
+    for _, item in ipairs(items) do
+        if item.label == "Freecam & NoClip" and item.submenu then old = item end
+    end
+    if old then
+        for i = #items, 1, -1 do
+            if items[i].label == "Freecam & World" then table.remove(items, i) end
+        end
+        old.label = "Freecam & World"
+        old.submenu.title = "FREECAM & WORLD"
+        old.submenu.items = {}
+        Crabe.Menu.stack = { { menu = Crabe.Menu.root, index = 1 } }
+    end
+end
+
+local freeCamItem = {
+    label = "Free Camera (Engine)",
     toggle = true,
     state = false,
-    onToggle = function(on)
-        if Crabe.Freecam then
-            Crabe.Freecam.setEnabled(on)
-        end
-        if on then
-            return "Flight ON! W/A/S/D: Fly | Right-Click + Mouse: Look | Space/Ctrl: Up/Down | Shift: Turbo"
-        else
-            return "Flight OFF (Restored)"
-        end
-    end,
-})
+}
 
-Crabe.Menu.registerInCategory("Freecam & NoClip", {
-    label = "Exit Editor (Return to Character)",
+-- The menu flips `state` before calling; it is set back to what the engine
+-- actually did, so a refused start does not leave the entry showing [ON].
+function freeCamItem.onToggle(on)
+    if not on then
+        Crabe.Camera.StopFreeCam()
+        return "Free camera OFF"
+    end
+
+    freeCamItem.state = false
+    freeCamItem.state = Crabe.Camera.StartFreeCam()
+    if not freeCamItem.state then
+        return "No camera to switch here (load a world first)"
+    end
+    return "Free camera ON -- left stick: fly | right stick: look | R1/R2: up/down"
+end
+
+Crabe.Menu.registerInCategory("Freecam & World", freeCamItem)
+
+-- One press can reach a handler several times in a row, and each of these
+-- starts a level transition: a second request inside this window is dropped.
+local LEAVE_COOLDOWN = 5.0
+local lastLeave = nil
+
+local function clock()
+    return (type(os) == "table" and type(os.clock) == "function") and os.clock() or nil
+end
+
+local function leaveAllowed()
+    local now = clock()
+    if lastLeave and (now == nil or now - lastLeave < LEAVE_COOLDOWN) then return false end
+    lastLeave = now or 0
+    return true
+end
+
+-- The pause menu's own Quit (pausemenu.lua PauseExit) without its popup: the
+-- game autosaves, then returns to the main menu by itself.
+Crabe.Menu.registerInCategory("Freecam & World", {
+    label = "Go to Main Menu",
     action = function()
-        local pid = type(Players_GetHostPlayerID) == "function" and Players_GetHostPlayerID() or 0
-        if type(Place_StopPlaceMode) == "function" then
-            pcall(Place_StopPlaceMode, pid, 0, false)
+        local world = Game.CurrentWorld()
+        if type(world) == "string" and string.lower(world) == "frontend" then
+            return "Already in the main menu"
         end
-        if type(Place_SetEditorState) == "function" then
-            pcall(Place_SetEditorState, pid, "Editor::IdleMode")
+        if not leaveAllowed() then return nil end
+        if Crabe.Camera.IsFreeCamActive() then
+            Crabe.Camera.StopFreeCam()
+            freeCamItem.state = false
         end
-        if type(Game) == "table" and type(Game.UnlockControls) == "function" then
-            pcall(Game.UnlockControls, pid)
-        end
-        return "Exited Editor -> Back to Human Character!"
+        Crabe.native("Pause_ExitGame", "Go to Main Menu")()
+        return "Going to the main menu..."
     end,
 })
 
-Crabe.Menu.registerInCategory("Freecam & NoClip", {
-    label = "Toy Box Spark Mode (Editor)",
-    action = function()
-        if type(Place_SetEditorState) == "function" then
-            local pid = type(Players_GetHostPlayerID) == "function" and Players_GetHostPlayerID() or 0
-            Place_SetEditorState(pid, "Editor::SparkMode")
-            return "Spark Editor Mode activated (use Exit Editor to return)"
-        else
-            return "Editor native unavailable in current screen"
-        end
-    end,
-})
-
-Crabe.Menu.registerInCategory("Freecam & NoClip", {
-    label = "Toy Box Object Mode (Editor)",
-    action = function()
-        if type(Place_SetEditorState) == "function" then
-            local pid = type(Players_GetHostPlayerID) == "function" and Players_GetHostPlayerID() or 0
-            Place_SetEditorState(pid, "Editor::ObjectMode")
-            return "Object Editor Mode activated (use Exit Editor to return)"
-        else
-            return "Editor native unavailable in current screen"
-        end
-    end,
-})
-
-Crabe.Menu.registerInCategory("Freecam & NoClip", {
-    label = "Freecam Flight Speed",
-    cycle = { "10 m/s (Explore)", "25 m/s (Fast)", "60 m/s (Supersonic)" },
-    index = 2,
-    onCycle = function(val, i)
-        local speeds = { 10.0, 25.0, 60.0 }
-        if Crabe.Freecam then
-            Crabe.Freecam.setSpeed(speeds[i] or 25.0)
-        end
-        return "Flight speed set to " .. val
-    end,
-})
-
-Crabe.Menu.registerInCategory("Freecam & NoClip", {
-    label = "Teleport Up +15m (Over Obstacles)",
-    action = function()
-        Crabe.Cheats.trackPosition()
-        local ok = Crabe.Cheats.teleportUp(15.0)
-        local x, y, z = Crabe.Cheats.position()
-        return ok and string.format("Teleported Up +15m -> (%.1f, %.1f, %.1f)", x or 0, y or 0, z or 0)
-                  or "Walk 1 step first to capture movement pointer"
-    end,
-})
-
-Crabe.Menu.registerInCategory("Freecam & NoClip", {
-    label = "Teleport Up +50m (Sky High)",
-    action = function()
-        Crabe.Cheats.trackPosition()
-        local ok = Crabe.Cheats.teleportUp(50.0)
-        local x, y, z = Crabe.Cheats.position()
-        return ok and string.format("Teleported Up +50m -> (%.1f, %.1f, %.1f)", x or 0, y or 0, z or 0)
-                  or "Walk 1 step first to capture movement pointer"
-    end,
-})
-
-Crabe.Menu.registerInCategory("Freecam & NoClip", {
-    label = "Teleport Forward +15m (Through Walls)",
-    action = function()
-        Crabe.Cheats.trackPosition()
-        local ok = Crabe.Cheats.teleportForward(15.0)
-        local x, y, z = Crabe.Cheats.position()
-        return ok and string.format("Teleported Forward +15m -> (%.1f, %.1f, %.1f)", x or 0, y or 0, z or 0)
-                  or "Walk 1 step first to capture movement pointer"
-    end,
-})
-
-Crabe.Menu.registerInCategory("Freecam & NoClip", {
+-- UI_ReturnToHub takes the player number, as pausemenu.lua passes it.
+Crabe.Menu.registerInCategory("Freecam & World", {
     label = "Return to Hub World",
-    action = function() Game.ReturnToHub() return "Returning to Hub..." end,
-})
-
-Crabe.Menu.registerInCategory("Freecam & NoClip", {
-    label = "Load Main Menu",
-    action = function() Game.LoadMainMenu() return "Loading Main Menu..." end,
+    action = function()
+        if not leaveAllowed() then return nil end
+        Crabe.native("UI_ReturnToHub", "Return to Hub World")(Crabe.hostPlayer())
+        return "Returning to the hub..."
+    end,
 })
 
 -- ---------------------------------------------------------------------------
 -- 3. God Mode & Player Cheats (Invuln?rabilit? C++ & Sant?)
 -- ---------------------------------------------------------------------------
 
-Crabe.Menu.registerInCategory("Cheats", {
+local godModeItem = {
     label = "God Mode (Invulnerability)",
     toggle = true,
     state = false,
-    onToggle = function(on)
-        Crabe.Cheats.setGodMode(on)
-        return on and "God mode ON (C++ Cave active)" or "God mode OFF"
-    end,
-})
+}
+
+function godModeItem.onToggle(on)
+    if not on then
+        Crabe.Cheats.setGodMode(false)
+        godModeItem.state = false
+        return "God mode OFF"
+    end
+
+    godModeItem.state = false
+    local ok = Crabe.Cheats.setGodMode(true)
+    if not ok then
+        error("God Mode caves failed to install (pattern scan failed or memory write refused)")
+    end
+    godModeItem.state = true
+    return "God mode ON (C++ Cave active)"
+end
+
+Crabe.Menu.registerInCategory("Cheats", godModeItem)
 
 Crabe.Menu.registerInCategory("Cheats", {
     label = "Lock To Last Damaged Entity",
@@ -308,27 +413,6 @@ Crabe.Menu.registerInCategory("Cheats", {
 Crabe.Menu.registerInCategory("Cheats", {
     label = "Reset Figure Memory",
     action = function() Game.ResetFigure() return "Figure memory reset" end,
-})
-
--- ---------------------------------------------------------------------------
--- 4. Simulation & Time Control (Ralenti Matrix & Vitesse)
--- ---------------------------------------------------------------------------
-
-Crabe.Menu.registerInCategory("Time", {
-    label = "Game Simulation Speed",
-    action = function()
-        local value = Crabe.GameSpeed.cycle()
-        return value == 1 and "Game speed back to normal (x1.00)"
-                           or string.format("Game speed x%.2f (Slow-Mo / Turbo)", value)
-    end,
-})
-
-Crabe.Menu.registerInCategory("Time", {
-    label = "Reset Game Speed (x1.00)",
-    action = function()
-        Crabe.GameSpeed.reset()
-        return "Game speed reset to normal (x1.00)"
-    end,
 })
 
 -- ---------------------------------------------------------------------------
@@ -823,8 +907,14 @@ local function setMenuOpen(open)
 end
 
 --- Applies one navigation key press to the menu.
-local function onNavKey(vk)
+-- Keys that act (select, back, close) run once per press; only the cursor
+-- keys follow Windows' auto-repeat, so holding Enter cannot fire an action
+-- ten times or launch the same level over and over.
+local REPEATABLE_KEYS = { [0x26] = true, [0x28] = true, [0x21] = true, [0x22] = true }
+
+local function onNavKey(vk, isRepeat)
     if not isMenuOpen or not Crabe.Menu then return end
+    if isRepeat and not REPEATABLE_KEYS[vk] then return end
 
     local menu = currentMenu()
     local count = (menu and menu.items) and #menu.items or 0
@@ -867,11 +957,11 @@ local function onNavKey(vk)
 end
 
 if Crabe and Crabe.Events and Crabe.Events.on then
-    Crabe.Events.on("keyDown", function(vk)
+    Crabe.Events.on("keyDown", function(vk, isRepeat)
         if vk == 0x74 then
-            setMenuOpen(not isMenuOpen)
+            if not isRepeat then setMenuOpen(not isMenuOpen) end
         else
-            onNavKey(vk)
+            onNavKey(vk, isRepeat)
         end
     end)
 end
@@ -949,7 +1039,7 @@ if Crabe and Crabe.Mod and Crabe.Mod.register then
             end
         end,
         onUpdate = function(dt)
-            if isGodModeActive then
+            if Crabe.Cheats.isGodMode() then
                 local p = (type(Game) == "table" and type(Game.GetLocalPlayer) == "function") and Game.GetLocalPlayer()
                 if p and type(Game.SetPlayerHealth) == "function" then
                     pcall(Game.SetPlayerHealth, p, 9999.0)

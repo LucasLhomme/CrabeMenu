@@ -1,7 +1,7 @@
 # CrabeMenu
 
 A full-featured in-game mod menu for **Disney Infinity 3.0 (PC)**, running on **CrabeLoader**. 
-Self-contained in one file: `mods/crabemenu.lua`.
+A mod of its own: `mod.json` + `main.lua`, deployed to the game's `mods\crabemenu\` folder.
 
 ---
 
@@ -9,7 +9,7 @@ Self-contained in one file: `mods/crabemenu.lua`.
 
 1. **Deploy to game folder:**
    ```powershell
-   .\deploy.ps1        # copies mods/crabemenu.lua to the game's mods\ directory
+   .\deploy.ps1        # copies mod.json + main.lua to the game's mods\crabemenu\ directory
    ```
 2. **Launch the game** and press **`F5`** to open/close the menu.
 3. **Controls:**
