@@ -52,17 +52,14 @@ local function installGodCaves()
     end
 
     local damageBody = table.concat({
-        "F6 45 0B 80",                                      -- test byte ptr [ebp+0Bh], 80h (is delta negative?)
-        "74 06",                                            -- jz +6 (skip lastDamaged)
-        "89 35 " .. le32(block + GOD_OFF.lastDamaged),      -- mov [lastDamaged], esi
-        "80 3D " .. le32(block + GOD_OFF.enabled) .. " 00", -- cmp byte ptr [enabled], 0
-        "74 1C",                                            -- jz +1Ch (exit)
-        "83 3D " .. le32(block + GOD_OFF.player) .. " 00",  -- cmp dword ptr [player], 0
-        "75 06",                                            -- jne +6 (check_match)
-        "89 35 " .. le32(block + GOD_OFF.player),           -- mov [player], esi (auto-adopt player on first hit!)
-        "3B 35 " .. le32(block + GOD_OFF.player),           -- cmp esi, [player]
-        "75 05",                                            -- jne +5 (exit)
-        "F3 0F 10 46 0C",                                   -- movss xmm0, dword ptr [esi+0Ch] (overwrite new health with maxHealth!)
+        "F6 45 0B 80",
+        "74 06",
+        "89 35 " .. le32(block + GOD_OFF.lastDamaged),
+        "80 3D " .. le32(block + GOD_OFF.enabled) .. " 00",
+        "74 0D",
+        "3B 35 " .. le32(block + GOD_OFF.player),
+        "75 05",
+        "F3 0F 10 46 0C",
     }, " ")
     local hudBody = table.concat({
         "51",
@@ -118,13 +115,11 @@ end
 Game.onTick(function()
     if not godBlock then return end
     godTicks = godTicks + 1
+    if godTicks % 15 ~= 0 then return end
     if not godLocked then
-        local currentPlayer = Crabe.Memory.readU32(godBlock + GOD_OFF.player)
-        if currentPlayer == 0 or godTicks % 15 == 0 then
-            local p = pickPlayerComponent()
-            if p and p ~= currentPlayer then
-                Crabe.Memory.writeU32(godBlock + GOD_OFF.player, p)
-            end
+        local p = pickPlayerComponent()
+        if p and p ~= Crabe.Memory.readU32(godBlock + GOD_OFF.player) then
+            Crabe.Memory.writeU32(godBlock + GOD_OFF.player, p)
         end
     end
     if Crabe.Memory.readU32(godBlock + GOD_OFF.enabled) ~= 0 then
@@ -136,14 +131,8 @@ end)
 function Crabe.Cheats.setGodMode(enabled)
     if not installGodCaves() then return false end
     Crabe.Memory.writeU32(godBlock + GOD_OFF.enabled, enabled and 1 or 0)
-    if enabled then
-        local p = pickPlayerComponent()
-        if p then
-            Crabe.Memory.writeU32(godBlock + GOD_OFF.player, p)
-        end
-        refillPlayer()
-    end
-    return true
+    if enabled then refillPlayer() end
+    return enabled
 end
 
 --- Returns whether god mode is currently enabled.
@@ -175,15 +164,31 @@ if Crabe.Memory.sharedBlock then
     end
 end
 
+local simulationSpeeds = { 0.25, 0.5, 1.0, 1.5, 2.0, 5.0 }
+local currentSpeedIdx = 3
+
+--- Cycles through simulation speeds.
+function Crabe.GameSpeed.cycle()
+    currentSpeedIdx = (currentSpeedIdx % #simulationSpeeds) + 1
+    return simulationSpeeds[currentSpeedIdx]
+end
+
+--- Resets simulation speed to normal.
+function Crabe.GameSpeed.reset()
+    currentSpeedIdx = 3
+    return 1.0
+end
+
+
+Crabe.Menu.registerInCategory("Heroes", {
+    label = "Avatar Status Summary",
+    action = function() return Game.GetAvatarSummary() end,
+})
+
 local applyRoute = "loadout"
 
 local function buildCharacterItems(franchise)
     local chars = Game.ListCharacters(franchise)
-    if not chars or #chars == 0 then
-        return {
-            { label = "(No characters found)", action = function() return "No characters available in this category" end }
-        }
-    end
     local items = {}
 
     local PAGE_SIZE = 14
@@ -219,12 +224,7 @@ local function buildCharacterItems(franchise)
 end
 
 Crabe.Menu.registerInCategory("Heroes", {
-    label = "Avatar Status Summary",
-    action = function() return Game.GetAvatarSummary() end,
-})
-
-Crabe.Menu.registerInCategory("Heroes", {
-    label = "Swap Character Model",
+    label = "Swap Character Model (104 Heroes)",
     submenu = {
         title = "HEROES & COMBAT",
         items = {
@@ -237,7 +237,6 @@ Crabe.Menu.registerInCategory("Heroes", {
                     return "Apply method set to: " .. v
                 end,
             },
-            { label = "★ Custom / Modded Characters", submenu = { title = "CUSTOM CHARACTERS", items = buildCharacterItems("custom") } },
             { label = "Star Wars (Jedi/Sith Sabers)", submenu = { title = "STAR WARS", items = buildCharacterItems("starwars") } },
             { label = "Marvel Superheroes", submenu = { title = "MARVEL", items = buildCharacterItems("marvel") } },
             { label = "Disney & Pixar Characters", submenu = { title = "DISNEY", items = buildCharacterItems("disney") } },
@@ -372,29 +371,15 @@ Crabe.Menu.registerInCategory("Freecam & World", {
 -- 3. God Mode & Player Cheats (Invuln?rabilit? C++ & Sant?)
 -- ---------------------------------------------------------------------------
 
-local godModeItem = {
+Crabe.Menu.registerInCategory("Cheats", {
     label = "God Mode (Invulnerability)",
     toggle = true,
     state = false,
-}
-
-function godModeItem.onToggle(on)
-    if not on then
-        Crabe.Cheats.setGodMode(false)
-        godModeItem.state = false
-        return "God mode OFF"
-    end
-
-    godModeItem.state = false
-    local ok = Crabe.Cheats.setGodMode(true)
-    if not ok then
-        error("God Mode caves failed to install (pattern scan failed or memory write refused)")
-    end
-    godModeItem.state = true
-    return "God mode ON (C++ Cave active)"
-end
-
-Crabe.Menu.registerInCategory("Cheats", godModeItem)
+    onToggle = function(on)
+        Crabe.Cheats.setGodMode(on)
+        return on and "God mode ON (C++ Cave active)" or "God mode OFF"
+    end,
+})
 
 Crabe.Menu.registerInCategory("Cheats", {
     label = "Lock To Last Damaged Entity",
@@ -413,6 +398,27 @@ Crabe.Menu.registerInCategory("Cheats", {
 Crabe.Menu.registerInCategory("Cheats", {
     label = "Reset Figure Memory",
     action = function() Game.ResetFigure() return "Figure memory reset" end,
+})
+
+-- ---------------------------------------------------------------------------
+-- 4. Simulation & Time Control (Ralenti Matrix & Vitesse)
+-- ---------------------------------------------------------------------------
+
+Crabe.Menu.registerInCategory("Time", {
+    label = "Game Simulation Speed",
+    action = function()
+        local value = Crabe.GameSpeed.cycle()
+        return value == 1 and "Game speed back to normal (x1.00)"
+                           or string.format("Game speed x%.2f (Slow-Mo / Turbo)", value)
+    end,
+})
+
+Crabe.Menu.registerInCategory("Time", {
+    label = "Reset Game Speed (x1.00)",
+    action = function()
+        Crabe.GameSpeed.reset()
+        return "Game speed reset to normal (x1.00)"
+    end,
 })
 
 -- ---------------------------------------------------------------------------
@@ -901,6 +907,9 @@ end
 --- while it is up so that arrows do not also steer the player.
 local function setMenuOpen(open)
     isMenuOpen = open
+    if open then
+        menuScrollTo = true
+    end
     if Crabe.Input and Crabe.Input.captureKeys then
         Crabe.Input.captureKeys(open and NAV_KEYS or nil)
     end
@@ -971,10 +980,16 @@ local function renderImGuiMenu()
     if not isMenuOpen or not ImGui then return end
 
     if ImGui.SetNextWindowSize then
-        ImGui.SetNextWindowSize(360, 420, 4)
+        ImGui.SetNextWindowSize(380, 440, 4)
     end
 
-    local visible = ImGui.Begin("Crabe Menu", true)
+    local visible, open = ImGui.Begin("Crabe Menu", true)
+    if open == false then
+        setMenuOpen(false)
+        ImGui.End()
+        return
+    end
+
     if not visible then
         ImGui.End()
         return
@@ -988,11 +1003,15 @@ local function renderImGuiMenu()
         return
     end
 
-    ImGui.Text(tostring(menu.title or "CRABE MENU"))
+    local stack = Crabe.Menu and Crabe.Menu.stack
+    local title = tostring(menu.title or "CRABE MENU")
+    if stack and #stack > 1 then
+        title = "< " .. title
+    end
+    ImGui.Text(title)
     ImGui.Separator()
 
     local count = #menu.items
-    local stack = Crabe.Menu and Crabe.Menu.stack
     local frame = stack and stack[#stack]
     if frame ~= lastFrame then
         lastFrame = frame
@@ -1002,15 +1021,16 @@ local function renderImGuiMenu()
     if menuCursor > count then menuCursor = count end
     if menuCursor < 1 then menuCursor = 1 end
 
-    ImGui.BeginChild("MenuScroll", 0, -56, false, 0)
+    -- ImGuiWindowFlags_NoMouseInputs = 512 (0x200):
+    -- Prevents the game engine's centered invisible mouse from hovering or clicking rows.
+    -- All navigation is cleanly driven by keyboard arrow keys / gamepad.
+    ImGui.BeginChild("MenuScroll", 0, -56, false, 512)
     for i, item in ipairs(menu.items) do
-        local selected = (i == menuCursor)
-        if ImGui.Selectable(entryLabel(item), selected) then
-            menuCursor = i
-            if frame then frame.index = i end
-            Crabe.Menu._activate(i)
-        end
-        if selected and menuScrollTo then
+        local isCurrent = (i == menuCursor)
+        local prefix = isCurrent and "> " or "  "
+        local displayLabel = prefix .. entryLabel(item) .. "##item_" .. tostring(i)
+        ImGui.Selectable(displayLabel, isCurrent)
+        if isCurrent and menuScrollTo then
             ImGui.SetScrollHereY(0.5)
         end
     end
@@ -1021,9 +1041,13 @@ local function renderImGuiMenu()
 
     local status = Crabe.Menu and Crabe.Menu.status
     if status and status ~= "" then
-        ImGui.Text(tostring(status))
+        if ImGui.TextColored then
+            ImGui.TextColored(0.3, 0.9, 0.4, 1.0, tostring(status))
+        else
+            ImGui.Text(tostring(status))
+        end
     else
-        ImGui.TextDisabled("Arrows move  -  Enter selects  -  Backspace goes back")
+        ImGui.TextDisabled("Fleches: Nav  |  Entree: OK  |  Retour: Precedent")
     end
 
     ImGui.End()
@@ -1039,7 +1063,7 @@ if Crabe and Crabe.Mod and Crabe.Mod.register then
             end
         end,
         onUpdate = function(dt)
-            if Crabe.Cheats.isGodMode() then
+            if isGodModeActive then
                 local p = (type(Game) == "table" and type(Game.GetLocalPlayer) == "function") and Game.GetLocalPlayer()
                 if p and type(Game.SetPlayerHealth) == "function" then
                     pcall(Game.SetPlayerHealth, p, 9999.0)
