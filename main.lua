@@ -1,7 +1,6 @@
 Crabe = Crabe or {}
-Crabe.Menu = Crabe.Menu or {}
-Crabe.Cheats = Crabe.Cheats or {}
-Crabe.GameSpeed = Crabe.GameSpeed or {}
+local Cheats = {}
+local GameSpeed = {}
 
 -- God mode: two code caves share one data block with this script.
 --   damage cave (apply-health-delta, esi = health component, [ebp+8] = delta):
@@ -128,7 +127,7 @@ Game.onTick(function()
 end)
 
 --- Sets god mode invulnerability state.
-function Crabe.Cheats.setGodMode(enabled)
+function Cheats.setGodMode(enabled)
     if not installGodCaves() then return false end
     Crabe.Memory.writeU32(godBlock + GOD_OFF.enabled, enabled and 1 or 0)
     if enabled then refillPlayer() end
@@ -136,12 +135,12 @@ function Crabe.Cheats.setGodMode(enabled)
 end
 
 --- Returns whether god mode is currently enabled.
-function Crabe.Cheats.isGodMode()
+function Cheats.isGodMode()
     return godBlock ~= nil and Crabe.Memory.readU32(godBlock + GOD_OFF.enabled) ~= 0
 end
 
 --- Pins god mode to the last component that lost health; returns its address (0 if none yet).
-function Crabe.Cheats.lockToLastDamaged()
+function Cheats.lockToLastDamaged()
     if not installGodCaves() then return 0 end
     local last = Crabe.Memory.readU32(godBlock + GOD_OFF.lastDamaged) or 0
     if last ~= 0 then
@@ -152,7 +151,7 @@ function Crabe.Cheats.lockToLastDamaged()
 end
 
 --- Returns to automatic player detection after lockToLastDamaged.
-function Crabe.Cheats.unlockGodTarget()
+function Cheats.unlockGodTarget()
     godLocked = false
 end
 
@@ -168,13 +167,13 @@ local simulationSpeeds = { 0.25, 0.5, 1.0, 1.5, 2.0, 5.0 }
 local currentSpeedIdx = 3
 
 --- Cycles through simulation speeds.
-function Crabe.GameSpeed.cycle()
+function GameSpeed.cycle()
     currentSpeedIdx = (currentSpeedIdx % #simulationSpeeds) + 1
     return simulationSpeeds[currentSpeedIdx]
 end
 
 --- Resets simulation speed to normal.
-function Crabe.GameSpeed.reset()
+function GameSpeed.reset()
     currentSpeedIdx = 3
     return 1.0
 end
@@ -223,6 +222,9 @@ local function buildCharacterItems(franchise)
     return items
 end
 
+-- Defined below; declared here so the "Modded Characters" entry's closure sees the local.
+local buildModdedCharactersSubmenu
+
 Crabe.Menu.registerInCategory("Heroes", {
     label = "Swap Character Model (104 Heroes)",
     submenu = {
@@ -240,7 +242,87 @@ Crabe.Menu.registerInCategory("Heroes", {
             { label = "Star Wars (Jedi/Sith Sabers)", submenu = { title = "STAR WARS", items = buildCharacterItems("starwars") } },
             { label = "Marvel Superheroes", submenu = { title = "MARVEL", items = buildCharacterItems("marvel") } },
             { label = "Disney & Pixar Characters", submenu = { title = "DISNEY", items = buildCharacterItems("disney") } },
+            { label = "★ Modded Characters", submenu = { title = "MODDED CHARACTERS", build = function() return buildModdedCharactersSubmenu() end } },
         }
+    }
+})
+
+
+function buildModdedCharactersSubmenu()
+    local items = {}
+    local chars = {}
+
+    -- 1. Characters registered via Crabe.ModdedCharacters
+    if Crabe and Crabe.ModdedCharacters then
+        for id, def in pairs(Crabe.ModdedCharacters) do
+            if type(def) == "table" and (def.name or def.Name) then
+                table.insert(chars, {
+                    id = id,
+                    name = def.name or def.Name,
+                    sku = def.sku or def.sku_id,
+                    action = def.action
+                })
+            end
+        end
+    end
+
+    -- 2. VirtualReader custom characters if any
+    if Crabe and Crabe.VirtualReader and Crabe.VirtualReader.getModdedCharacters then
+        local ok, vrChars = pcall(Crabe.VirtualReader.getModdedCharacters)
+        if ok and type(vrChars) == "table" then
+            for _, row in ipairs(vrChars) do
+                local rName = row.Name or "Custom"
+                local exists = false
+                for _, c in ipairs(chars) do
+                    if string.lower(c.name) == string.lower(rName) then exists = true break end
+                end
+                if not exists then
+                    table.insert(chars, {
+                        id = rName:lower(),
+                        name = rName,
+                        sku = tonumber(row.sku_id) or row.sku_id,
+                    })
+                end
+            end
+        end
+    end
+
+    table.sort(chars, function(a, b) return tostring(a.name) < tostring(b.name) end)
+
+    if #chars == 0 then
+        table.insert(items, {
+            label = "No modded characters detected",
+            action = function() return "No custom characters found in Crabe.ModdedCharacters" end
+        })
+    else
+        for _, c in ipairs(chars) do
+            table.insert(items, {
+                label = string.format("Load %s", tostring(c.name)),
+                action = function()
+                    if c.action then
+                        return c.action()
+                    end
+                    local sku = c.sku
+                    if not sku then return "Error: Character has no SKU" end
+                    local before = (Game and Game.GetAvatarSku) and Game.GetAvatarSku() or 0
+                    if Game and type(Game.SetCharacter) == "function" then
+                        Game.SetCharacter(sku, applyRoute or "loadout")
+                        return string.format("Swapped to %s (SKU %s -> %s)", tostring(c.name), tostring(before), tostring(sku))
+                    end
+                    return "Game.SetCharacter unavailable"
+                end
+            })
+        end
+    end
+
+    return items
+end
+
+Crabe.Menu.registerInCategory("Heroes", {
+    label = "★ Modded Characters",
+    submenu = {
+        title = "MODDED CHARACTERS",
+        build = buildModdedCharactersSubmenu,
     }
 })
 
@@ -278,26 +360,6 @@ Crabe.Menu.registerInCategory("Heroes", {
 -- 2. Free camera (the engine's own) & leaving the world
 -- ---------------------------------------------------------------------------
 
--- Hot reload keeps the menu tree, and this category used to be called
--- "Freecam & NoClip": take that entry over in place and drop any duplicate,
--- so no stale button from the old name stays on screen.
-do
-    local items = Crabe.Menu.root.items
-    local old
-    for _, item in ipairs(items) do
-        if item.label == "Freecam & NoClip" and item.submenu then old = item end
-    end
-    if old then
-        for i = #items, 1, -1 do
-            if items[i].label == "Freecam & World" then table.remove(items, i) end
-        end
-        old.label = "Freecam & World"
-        old.submenu.title = "FREECAM & WORLD"
-        old.submenu.items = {}
-        Crabe.Menu.stack = { { menu = Crabe.Menu.root, index = 1 } }
-    end
-end
-
 local freeCamItem = {
     label = "Free Camera (Engine)",
     toggle = true,
@@ -321,6 +383,27 @@ function freeCamItem.onToggle(on)
 end
 
 Crabe.Menu.registerInCategory("Freecam & World", freeCamItem)
+
+-- A world change ends the free camera behind the menu's back: keep the entry
+-- showing what the camera API says, not the last press.
+Crabe.Events.on("tick", function()
+    freeCamItem.state = Crabe.Camera.IsFreeCamActive()
+end)
+
+-- Fly the free camera somewhere, then drop the avatar there and take control back.
+Crabe.Menu.registerInCategory("Freecam & World", {
+    label = "Teleport Player to Camera",
+    action = function()
+        if not Crabe.Camera.IsFreeCamActive() then
+            return "Turn the free camera on and fly to the spot first"
+        end
+        local placed, reason = Crabe.Camera.MovePlayerToCamera()
+        if not placed then
+            return "Teleport failed (" .. tostring(reason) .. ")"
+        end
+        return "Player moved to the camera"
+    end,
+})
 
 -- One press can reach a handler several times in a row, and each of these
 -- starts a level transition: a second request inside this window is dropped.
@@ -350,7 +433,6 @@ Crabe.Menu.registerInCategory("Freecam & World", {
         if not leaveAllowed() then return nil end
         if Crabe.Camera.IsFreeCamActive() then
             Crabe.Camera.StopFreeCam()
-            freeCamItem.state = false
         end
         Crabe.native("Pause_ExitGame", "Go to Main Menu")()
         return "Going to the main menu..."
@@ -362,6 +444,9 @@ Crabe.Menu.registerInCategory("Freecam & World", {
     label = "Return to Hub World",
     action = function()
         if not leaveAllowed() then return nil end
+        if Crabe.Camera.IsFreeCamActive() then
+            Crabe.Camera.StopFreeCam()
+        end
         Crabe.native("UI_ReturnToHub", "Return to Hub World")(Crabe.hostPlayer())
         return "Returning to the hub..."
     end,
@@ -376,7 +461,7 @@ Crabe.Menu.registerInCategory("Cheats", {
     toggle = true,
     state = false,
     onToggle = function(on)
-        Crabe.Cheats.setGodMode(on)
+        Cheats.setGodMode(on)
         return on and "God mode ON (C++ Cave active)" or "God mode OFF"
     end,
 })
@@ -384,7 +469,7 @@ Crabe.Menu.registerInCategory("Cheats", {
 Crabe.Menu.registerInCategory("Cheats", {
     label = "Lock To Last Damaged Entity",
     action = function()
-        local address = Crabe.Cheats.lockToLastDamaged()
+        local address = Cheats.lockToLastDamaged()
         return address ~= 0 and string.format("Protected entity: 0x%X", address)
                              or "No entity has taken damage yet"
     end,
@@ -407,7 +492,7 @@ Crabe.Menu.registerInCategory("Cheats", {
 Crabe.Menu.registerInCategory("Time", {
     label = "Game Simulation Speed",
     action = function()
-        local value = Crabe.GameSpeed.cycle()
+        local value = GameSpeed.cycle()
         return value == 1 and "Game speed back to normal (x1.00)"
                            or string.format("Game speed x%.2f (Slow-Mo / Turbo)", value)
     end,
@@ -416,7 +501,7 @@ Crabe.Menu.registerInCategory("Time", {
 Crabe.Menu.registerInCategory("Time", {
     label = "Reset Game Speed (x1.00)",
     action = function()
-        Crabe.GameSpeed.reset()
+        GameSpeed.reset()
         return "Game speed reset to normal (x1.00)"
     end,
 })
@@ -965,14 +1050,39 @@ local function onNavKey(vk, isRepeat)
     end
 end
 
+-- F5 reaches the menu two ways: the loader's keyDown event, and a direct poll of
+-- the key every tick. The event queue is shared by every Lua state the game
+-- opens, so a state that does not draw can swallow the press; the poll cannot be
+-- stolen. Both paths go through toggleMenu, which drops a second toggle landing
+-- within TOGGLE_COOLDOWN seconds of the first.
+local TOGGLE_COOLDOWN = 0.3
+local menuClock = 0
+local lastToggleAt = -1
+local f5WasDown = false
+
+local function toggleMenu()
+    if menuClock - lastToggleAt < TOGGLE_COOLDOWN then return end
+    lastToggleAt = menuClock
+    setMenuOpen(not isMenuOpen)
+end
+
 if Crabe and Crabe.Events and Crabe.Events.on then
     Crabe.Events.on("keyDown", function(vk, isRepeat)
         if vk == 0x74 then
-            if not isRepeat then setMenuOpen(not isMenuOpen) end
+            if not isRepeat then toggleMenu() end
         else
             onNavKey(vk, isRepeat)
         end
     end)
+end
+
+--- Edge-detects F5 straight from the keyboard state.
+local function pollMenuKey(dt)
+    menuClock = menuClock + (dt or 0.016)
+    if not Crabe._keyDown then return end
+    local down = Crabe._keyDown(0x74) == 1
+    if down and not f5WasDown then toggleMenu() end
+    f5WasDown = down
 end
 
 --- Renders the complete CrabeMenu ImGui interface.
@@ -983,10 +1093,7 @@ local function renderImGuiMenu()
         ImGui.SetNextWindowSize(380, 440, 4)
     end
 
-    -- ImGuiWindowFlags_NoInputs = 197120 (NoMouseInputs 512 | NoNavInputs 65536 | NoNavFocus 131072)
-    -- Guarantees pure keyboard/gamepad navigation with zero mouse-hover or nav-focus side effects.
-    local WINDOW_FLAGS = 197120
-    local visible, open = ImGui.Begin("Crabe Menu", true, WINDOW_FLAGS)
+    local visible, open = ImGui.Begin("Crabe Menu", true)
     if open == false then
         setMenuOpen(false)
         ImGui.End()
@@ -1024,7 +1131,10 @@ local function renderImGuiMenu()
     if menuCursor > count then menuCursor = count end
     if menuCursor < 1 then menuCursor = 1 end
 
-    ImGui.BeginChild("MenuScroll", 0, -56, false, WINDOW_FLAGS)
+    -- ImGuiWindowFlags_NoMouseInputs = 512 (0x200):
+    -- Prevents the game engine's centered invisible mouse from hovering or clicking rows.
+    -- All navigation is cleanly driven by keyboard arrow keys / gamepad.
+    ImGui.BeginChild("MenuScroll", 0, -56, false, 512)
     for i, item in ipairs(menu.items) do
         local isCurrent = (i == menuCursor)
         local prefix = isCurrent and "> " or "  "
@@ -1063,6 +1173,7 @@ if Crabe and Crabe.Mod and Crabe.Mod.register then
             end
         end,
         onUpdate = function(dt)
+            pollMenuKey(dt)
             if isGodModeActive then
                 local p = (type(Game) == "table" and type(Game.GetLocalPlayer) == "function") and Game.GetLocalPlayer()
                 if p and type(Game.SetPlayerHealth) == "function" then
@@ -1078,5 +1189,3 @@ if Crabe and Crabe.Mod and Crabe.Mod.register then
         end
     })
 end
-
-
