@@ -2,23 +2,32 @@ local Util = {}
 
 local function squash(text)
     local lowered = tostring(text or ""):lower()
-    local squashed = lowered:gsub("%s+", "")
+    local squashed = lowered:gsub("[%s_]+", "")
     return squashed
 end
 
---- Keeps the rows whose listed fields contain the query, ignoring case and spaces.
+local searchKeys = setmetatable({}, { __mode = "k" })
+
+local function searchKey(row, fields)
+    local key = searchKeys[row]
+    if key then return key end
+
+    local parts = {}
+    for index, field in ipairs(fields) do parts[index] = squash(row[field]) end
+    key = table.concat(parts, "\1")
+    searchKeys[row] = key
+    return key
+end
+
+--- Keeps the rows whose listed fields contain the query, ignoring case, spaces and underscores.
+--- Each row's searchable text is computed once, so typing in a list of thousands stays cheap.
 function Util.filter(rows, query, fields)
     local needle = squash(query)
     if needle == "" then return rows end
 
     local kept = {}
     for _, row in ipairs(rows) do
-        for _, field in ipairs(fields) do
-            if squash(row[field]):find(needle, 1, true) then
-                kept[#kept + 1] = row
-                break
-            end
-        end
+        if searchKey(row, fields):find(needle, 1, true) then kept[#kept + 1] = row end
     end
     return kept
 end

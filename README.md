@@ -1,45 +1,87 @@
 # CrabeMenu
 
-A full-featured in-game mod menu for **Disney Infinity 3.0 (PC)**, running on **CrabeLoader**. 
-A mod of its own: `mod.json` + `main.lua`, deployed to the game's `mods\crabemenu\` folder.
+In-game mod menu for **Disney Infinity 3.0 (PC)**, running on **CrabeLoader**.
+It is a mod of its own: `mod.json` + `main.lua`, deployed to the game's `mods\crabemenu\` folder.
+All game access goes through the stable `Crabe.*` and `Game.*` APIs.
 
----
+## Use
 
-## 🎮 Quick Start
+```powershell
+.\deploy.ps1          # copies the menu to mods\crabemenu\ and removes the legacy crabemenu.lua
+.\deploy.ps1 -Full    # also syncs bink2w32.dll, window_mode.lua, the hero pack, and removes obsolete game folders
+```
 
-1. **Deploy to game folder:**
-   ```powershell
-   .\deploy.ps1        # copies mod.json + main.lua to the game's mods\crabemenu\ directory
-   ```
-2. **Launch the game** and press **`F5`** to open/close the menu.
-3. **Controls:**
-   - **Arrow Keys** : Navigate rows & submenus
-   - **Enter** : Activate / Toggle / Enter submenu
-   - **Backspace** : Go back to previous menu
-   - **Insert** : Open developer debug console & Lua prompt (separate ImGui overlay)
+The menu is a single list in the Disney Infinity colours: a banner, a breadcrumb with an `X / N` counter,
+one highlighted row, and a help line at the bottom. It needs a CrabeLoader that provides `ImGui.DrawText`
+(screen-space drawing) and `Crabe.Input.padState` (controller input); `loader.log` says so when the DLL is too old.
 
----
+| Keyboard | Controller | Action |
+|---|---|---|
+| `F5` | `RB` + D-pad left | Open / close the menu |
+| Up / Down | D-pad or left stick | Move (wraps; hold to repeat) |
+| Left / Right | D-pad or left stick | Change a `< value >` or flip a switch |
+| `Enter` | `A` | Select, open a sub-menu, or edit a text field |
+| `Esc` / `Backspace` | `B` | Back; closes the menu on the main page |
+| `Page Up` / `Page Down` | `LT` / `RT` | Jump 8 rows |
+| `Home` / `End` | | First / last row |
+| `F6` | | Toggle the runtime overlay |
+| `F4` | | CrabeLoader hot reload |
+| `Insert` | | CrabeLoader console |
 
-## 📂 Features & Categories
+While the menu is open the game does not see the navigation keys or the controller. Text fields (search, host IP,
+animation name) are typed on the keyboard; the search lists narrow as you type. Menu side, menu size and the overlay
+choice are saved to `crabemenu_settings.json`.
 
-| Category | Features & Actions |
+## Pages
+
+| Page | What it does |
 |---|---|
-| **💰 Money** | Add/Remove Sparks (+50k, +1M, -50k, -1M), inspect Round Coins & Hex Coins (Power Discs). |
-| **👤 Player** | Avatar status, Level Up (direct or skill-tree route), Set progression level (5/10/20), Life (Core health, alive check, checkpoint respawn, figure reset), Controls lock/unlock. |
-| **🎭 Change character** | Instant swap across all **104 shipped characters** categorized by franchise (Disney, Marvel, Star Wars) with `loadout` and `legacy` application routes. |
-| **🛡️ Cheats** | Invulnerability (God Mode with automatic entity lock), Movement speed multiplier (x1, x2, x5, x10), Live position hunt, and Toy Box Editor unlocked everywhere (`Crabe.Memory.patchBytes`). |
-| **🌍 World** | Current world/zone info, destination counter, travel to any loaded destination level, return to Hub, load Main Menu, reset Toy Box / Play Set. |
-| **📷 Camera** | Detached Editor camera modes (Object mode, Spark mode), camera target probe, Clean screenshot mode (HUD, DoF & Motion Blur toggles). |
-| **🔓 Unlock** | Unlock any Play Set (Avengers, Asgard, Empire, Clone Wars, Inside Out, etc.), force progression unlocked mode. |
-| **⚔️ Spawn** | Equip tools, weapons, jetpacks, hoverboards & lightsabers (Tron Disc, Boba Fett Jetpack, Green Lightsaber, Blaster, etc.). |
-| **⚙️ Settings** | Video toggles (Bloom, SSAO, FXAA, Motion Blur, Depth of Field, Dynamic Resolution), Difficulty setting (0-3), HUD visibility toggle. |
-| **💾 Save** | Save availability check, World autosave slot trigger, Profile save (progression & unlocks). |
+| **Player & Heroes** | Swap character (Star Wars, Marvel, Disney, custom heroes), level up, max level, refill health, Sparks |
+| **Spawners** | Scan the world inventory, spawn NPCs and objects (searchable), equip weapons from the loader catalog, clear placed objects |
+| **Animations** | The 7,784 choreographies of `Game.ListChoreographies()` by category, searchable, or play one by name |
+| **Cheats** | God Mode (x86 code caves), game speed (needs `Crabe.GameSpeed`), Toy Box editor unlock |
+| **Camera** | Free camera and teleport, when `modules/freecam.lua` is present |
+| **Settings** | Menu side and size, overlay, video options, credits |
 
----
+Multiplayer and the free camera are kept out of the repository (`.gitignore`); the menu shows their pages only
+when their files are there. The animation list comes from CrabeLoader's catalog, so nothing scans the game folder
+at run time (the old `io.popen` scan froze the game for seconds).
 
-## 🛠️ Architecture & Error Handling
+Every action reports its real outcome in the footer. A failing native shows an error and is written to
+`loader.log`; nothing is announced as done unless it was.
 
-- **Decoupled Architecture:** Runs seamlessly on **CrabeLoader V2**, utilizing the event bus (`Crabe.Events.on('keyDown')`), memory primitives (`Crabe.Memory.patchBytes`), and Dear ImGui rendering inside `Crabe.Mod.register({ onDraw = ... })`.
-- **No redundant `pcall`:** The loader's API raises clean, named errors when a native is unavailable (`Game.LoadLevel: UI_LaunchLevel is not available in this Lua state`), and CrabeMenu automatically catches errors per handler, displays them in the menu status line, and logs them to `loader.log`.
-- **Thread-safe Execution:** Handlers run safely on the game's Lua thread during frame ticks, avoiding cross-thread race conditions with DirectX render loops.
+## Requirements and limits
 
+- **Game speed** is only available when the loader provides `Crabe.GameSpeed`. The current loader source does not,
+  so the section shows a notice until the clock hook is restored.
+- **Spawners** need a loaded world: the engine has no inventory on the main menu.
+- The Power Disc selector was removed: `Game.SetRoundCoins` / `SetHexCoins` take slot ids that are not documented,
+  and the previous ids were placeholders.
+
+## Layout
+
+```text
+mods/crabemenu/
+├── mod.json
+├── main.lua              entry point: loader bootstrap, lifecycle
+├── core/
+│   ├── loader.lua        module loader (cached per generation, runs modules in the mod's sandbox)
+│   ├── config.lua        version, keys, key repeat, layout sizes, menu scales
+│   ├── state.lua         shared state, footer status, key and controller capture
+│   ├── input.lua         keyboard + controller actions with key repeat, text entry
+│   ├── settings.lua      saves the menu side, size and overlay choice
+│   ├── native.lua        the only place that catches errors (Native.run reports, Native.poll stays silent)
+│   └── util.lua          search filter, name formatting, IPv4 check
+├── modules/              behavior, no drawing
+│   ├── player.lua  spawner.lua  weapons.lua  animations.lua  cheats.lua
+│   └── speedhack.lua  world.lua  (freecam.lua, multiplayer.lua: optional, not in the repository)
+└── ui/                   drawing, no game logic
+    ├── theme.lua         palette and the scaled drawing helpers (ImGui.Draw*)
+    ├── items.lua         row kinds: action, toggle, submenu, choice, input, info, section
+    ├── menu.lua          page stack, navigation, prompt, rendering
+    ├── overlay.lua       F6 runtime card
+    └── pages/            one file per page; list.lua is the searchable list page
+```
+
+A page is `{ title = "...", items = function() return { Items.action(...), Items.toggle(...), ... } end }`.
+Modules are loaded with `Loader.load("modules.player")` and receive the loader as `...`.

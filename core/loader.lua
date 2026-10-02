@@ -34,4 +34,13 @@ function Loader.load(name)
     return module
 end
 
+--- Reports whether a module file ships with this copy of the mod. Optional parts
+--- (multiplayer, free camera) are kept out of the repository and may be absent.
+function Loader.exists(name)
+    local file = io.open(root .. name:gsub("%.", "/") .. ".lua", "r")
+    if not file then return false end
+    file:close()
+    return true
+end
+
 return Loader

@@ -1,5 +1,9 @@
 modules/freecam.lua
 
+# Multiplayer is work in progress and stays out of the repository for now;
+# the menu shows its page only when both files are present.
+modules/multiplayer.lua
+ui/pages/multiplayer.lua
 
 # Temporary files & Logs
 *.log

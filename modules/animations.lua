@@ -1,13 +1,8 @@
 local Loader = ...
 local State = Loader.load("core.state")
 local Native = Loader.load("core.native")
-local Util = Loader.load("core.util")
 
 local Animations = {}
-
-local CHOREOGRAPHY_DIR = "assets\\choreographies"
-local IGNORED_DIRECTORIES = { igp = true, karting = true, psx = true, tcw = true, tron = true, vehicles = true }
-local MIN_NAME_LENGTH = 3
 
 Animations.CATEGORIES = {
     { id = "avatar", label = "Universal Avatar" },
@@ -51,8 +46,7 @@ local STRIPPED_PREFIXES = {
     "^cin_mba_", "^cin_tcw_", "^cin_", "^wpnfx_",
 }
 
-local scanned = false
-local filterItems = Util.newFilter({ "id", "label" })
+local loaded = false
 
 Animations.itemsByCategory = {}
 
@@ -96,77 +90,31 @@ local function bucketize(ids)
         local category = categoryFor(id)
         if category then buckets[category][#buckets[category] + 1] = item end
     end
-
-    for _, items in pairs(buckets) do
-        table.sort(items, function(a, b) return a.id < b.id end)
-    end
     Animations.itemsByCategory = buckets
 end
 
-local function listLines(command)
-    local pipe = io.popen(command)
-    if not pipe then return nil end
-
-    local lines = {}
-    for line in pipe:lines() do
-        lines[#lines + 1] = line:gsub("%s+$", "")
-    end
-    pipe:close()
-    return lines
+local function ensureLoaded()
+    if loaded then return end
+    loaded = true
+    if not Animations.isAvailable() then return end
+    bucketize(Native.poll(Game.ListChoreographies) or {})
 end
 
-local function collectIds()
-    local seen, ids = {}, {}
-    local function add(id)
-        if id ~= "" and not seen[id] then
-            seen[id] = true
-            ids[#ids + 1] = id
-        end
-    end
-
-    local directories = listLines('dir /ad /b "' .. CHOREOGRAPHY_DIR .. '" 2>nul')
-    if not directories then return nil end
-    for _, name in ipairs(directories) do
-        if #name >= MIN_NAME_LENGTH and not IGNORED_DIRECTORIES[name:lower()] then add(name) end
-    end
-
-    local archives = listLines('dir /s /b "' .. CHOREOGRAPHY_DIR .. '\\*.zip" 2>nul') or {}
-    for _, path in ipairs(archives) do
-        add(path:match("([^\\/]+)%.zip$") or "")
-    end
-
-    table.sort(ids)
-    return ids
+--- Reports whether the loader ships the choreography catalog (Game.ListChoreographies).
+function Animations.isAvailable()
+    return type(Game.ListChoreographies) == "function"
 end
 
---- Scans assets/choreographies for animation names and sorts them into categories.
-function Animations.scan()
-    scanned = true
-    Animations.itemsByCategory = {}
-    if not io.popen then return Native.fail("Animations: io.popen is unavailable, cannot scan the game folder") end
-
-    local ok, ids = Native.run("Animations scan", collectIds)
-    if not ok then return false end
-    if not ids then return Native.fail("Animations: could not list " .. CHOREOGRAPHY_DIR) end
-    if #ids == 0 then
-        State.setStatus("No choreographies found under " .. CHOREOGRAPHY_DIR, "warning")
-        return false
-    end
-
-    bucketize(ids)
-    State.setStatus(string.format("Found %d choreographies", #ids), "success")
-    return true
+--- Returns the items of one category, sorting the catalog into categories on first use.
+function Animations.getCategory(categoryId)
+    ensureLoaded()
+    return Animations.itemsByCategory[categoryId]
 end
 
---- Reports whether a scan has been attempted since the module was loaded.
-function Animations.hasScanned()
-    return scanned
-end
-
---- Returns the items of a category whose id or label matches the search text.
-function Animations.getItems(categoryId, searchText)
-    local items = Animations.itemsByCategory[categoryId] or {}
-    return filterItems(items, searchText)
+--- Returns how many choreographies the catalog lists.
+function Animations.count()
+    local all = Animations.getCategory("all")
+    return all and #all or 0
 end
 
 --- Plays a choreography on the host player.
@@ -175,10 +123,16 @@ function Animations.play(name)
         State.setStatus("Pick or type an animation name first", "warning")
         return false
     end
-    if type(PlayAwardCho) ~= "function" then
+
+    local ok
+    if type(Game.PlayChoreography) == "function" then
+        ok = Native.run("Game.PlayChoreography", Game.PlayChoreography, name)
+    elseif type(PlayAwardCho) == "function" then
+        ok = Native.run("PlayAwardCho", PlayAwardCho, Crabe.hostPlayer(), name)
+    else
         return Native.fail("Animations: PlayAwardCho is not available in this Lua state")
     end
-    if not Native.run("PlayAwardCho", PlayAwardCho, name, Crabe.hostPlayer()) then return false end
+    if not ok then return false end
 
     State.setStatus("Playing animation: " .. name, "success")
     return true

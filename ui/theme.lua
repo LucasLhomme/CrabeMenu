@@ -1,82 +1,80 @@
-local Loader = ...
-local Config = Loader.load("core.config")
-
 local Theme = {}
 
-local COLORS = Config.THEME
+Theme.FONT = { DEFAULT = 0, BODY = 1, DISPLAY = 2 }
+Theme.ALIGN = { LEFT = 0, CENTER = 1, RIGHT = 2 }
 
-local BADGE_COLORS = {
-    cyan = COLORS.ACCENT_CYAN,
-    gold = COLORS.ACCENT_GOLD,
-    green = COLORS.ACCENT_GREEN,
-    red = COLORS.ACCENT_RED,
-    purple = COLORS.ACCENT_PURPLE,
-    muted = COLORS.TEXT_MUTED,
+Theme.PALETTE = {
+    night = { 6, 12, 40 },
+    panel = { 11, 22, 62 },
+    royal = { 30, 70, 190 },
+    violet = { 118, 52, 220 },
+    cyan = { 64, 224, 255 },
+    ice = { 196, 245, 255 },
+    gold = { 255, 204, 72 },
+    white = { 244, 247, 255 },
+    muted = { 140, 160, 208 },
+    green = { 60, 224, 124 },
+    red = { 255, 92, 108 },
+    black = { 0, 0, 0 },
 }
 
-local STATUS_COLORS = {
-    info = COLORS.ACCENT_CYAN,
-    success = COLORS.ACCENT_GREEN,
-    warning = COLORS.ACCENT_GOLD,
-    error = COLORS.ACCENT_RED,
+Theme.STATUS = {
+    info = "cyan",
+    success = "green",
+    warning = "gold",
+    error = "red",
 }
 
---- Draws text in an RGBA color.
-function Theme.textColored(color, text)
-    ImGui.TextColored(color[1], color[2], color[3], color[4], tostring(text))
+local scale = 1
+local originX, originY = 0, 0
+local opacity = 1
+
+local function pack(r, g, b, a)
+    return ((a * 256 + b) * 256 + g) * 256 + r
 end
 
-function Theme.textPrimary(text) Theme.textColored(COLORS.TEXT_PRIMARY, text) end
-function Theme.textMuted(text) Theme.textColored(COLORS.TEXT_MUTED, text) end
-function Theme.textCyan(text) Theme.textColored(COLORS.ACCENT_CYAN, text) end
-function Theme.textGold(text) Theme.textColored(COLORS.ACCENT_GOLD, text) end
-function Theme.textRed(text) Theme.textColored(COLORS.ACCENT_RED, text) end
-
---- Returns the color that goes with a status type.
-function Theme.statusColor(statusType)
-    return STATUS_COLORS[statusType] or COLORS.ACCENT_CYAN
+--- Starts a frame: design units are multiplied by `factor` and offset by the origin,
+--- and every alpha is multiplied by `alpha` (used for the open fade).
+function Theme.beginFrame(factor, x, y, alpha)
+    scale, originX, originY, opacity = factor, x or 0, y or 0, alpha or 1
 end
 
---- Draws a tab title followed by a separator.
-function Theme.header(title)
-    Theme.textGold(title:upper())
-    ImGui.Separator()
-    ImGui.Spacing()
+--- Returns a packed colour from a palette name and an alpha between 0 and 255.
+function Theme.color(name, alpha)
+    local rgb = Theme.PALETTE[name] or Theme.PALETTE.white
+    local a = math.floor(math.max(0, math.min(255, (alpha or 255) * opacity)) + 0.5)
+    return pack(rgb[1], rgb[2], rgb[3], a)
 end
 
---- Draws a section title followed by a separator.
-function Theme.subHeader(title)
-    ImGui.Spacing()
-    Theme.textCyan(title)
-    ImGui.Separator()
+local function sx(x) return originX + x * scale end
+local function sy(y) return originY + y * scale end
+
+function Theme.rect(x, y, w, h, color, rounding, thickness)
+    ImGui.DrawRect(sx(x), sy(y), w * scale, h * scale, color, (rounding or 0) * scale, thickness or 0)
 end
 
---- Draws a compact colored tag such as [GOD ON].
-function Theme.badge(label, colorName)
-    Theme.textColored(BADGE_COLORS[colorName] or COLORS.ACCENT_CYAN, "[" .. label .. "]")
+function Theme.gradient(x, y, w, h, from, to, horizontal)
+    ImGui.DrawGradient(sx(x), sy(y), w * scale, h * scale, from, to, horizontal == true)
 end
 
---- Draws a standard-height button and returns whether it was clicked.
-function Theme.button(label, width)
-    return ImGui.Button(label, width or 0, Config.UI.BUTTON_HEIGHT)
+function Theme.line(x1, y1, x2, y2, color, thickness)
+    ImGui.DrawLine(sx(x1), sy(y1), sx(x2), sy(y2), color, math.max(1, (thickness or 1) * scale))
 end
 
---- Draws a scrolling list of selectable rows, capped so a huge catalog stays cheap.
---- describe(row) gives the row text; onPick(row) runs when it is clicked.
-function Theme.selectList(id, rows, describe, onPick, emptyText)
-    ImGui.BeginChild(id, 0, Config.UI.LIST_HEIGHT, true)
+function Theme.circle(x, y, radius, color, thickness)
+    ImGui.DrawCircle(sx(x), sy(y), radius * scale, color, (thickness or 0) * scale)
+end
 
-    if #rows == 0 then ImGui.TextDisabled(emptyText) end
+--- Draws text whose top-left is (x, y), or aligned inside a box `width` wide.
+--- Text that does not fit the box ends with "...".
+function Theme.text(x, y, text, color, size, font, align, width, shadow)
+    ImGui.DrawText(sx(x), sy(y), tostring(text), color, size * scale, font or Theme.FONT.BODY,
+        align or Theme.ALIGN.LEFT, (width or 0) * scale, shadow or 0)
+end
 
-    local shown = math.min(#rows, Config.UI.MAX_LIST_ROWS)
-    for i = 1, shown do
-        if ImGui.Selectable(describe(rows[i]) .. "##" .. i, false) then onPick(rows[i]) end
-    end
-    if #rows > shown then
-        ImGui.TextDisabled(string.format("... %d more, narrow the search", #rows - shown))
-    end
-
-    ImGui.EndChild()
+--- Draws text vertically centred in a row of the given height.
+function Theme.rowText(x, y, rowHeight, text, color, size, align, width, font)
+    Theme.text(x, y + (rowHeight - size) / 2, text, color, size, font, align, width)
 end
 
 return Theme

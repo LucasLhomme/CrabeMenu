@@ -35,26 +35,20 @@ local Loader = loadLoader()
 
 local Config = Loader.load("core.config")
 local State = Loader.load("core.state")
-local Overlay = Loader.load("ui.overlay")
+local Input = Loader.load("core.input")
+local Settings = Loader.load("core.settings")
 local Menu = Loader.load("ui.menu")
+local Overlay = Loader.load("ui.overlay")
 local Cheats = Loader.load("modules.cheats")
 local PlayerModule = Loader.load("modules.player")
 
 local FALLBACK_FRAME_TIME = 0.016
 
-local previouslyDown = {}
+local canDraw = type(ImGui) == "table" and type(ImGui.DrawText) == "function"
+    and type(ImGui.GetDisplaySize) == "function"
 
-local function risingEdge(virtualKey)
-    local down = Crabe._keyDown(virtualKey) == 1
-    local pressed = down and not previouslyDown[virtualKey]
-    previouslyDown[virtualKey] = down
-    return pressed
-end
-
-local function pollKeys()
-    if risingEdge(Config.KEYS.MENU_TOGGLE) then State.setMenuOpen(not State.isMenuOpen) end
-    if risingEdge(Config.KEYS.OVERLAY_TOGGLE) then State.toggleOverlay() end
-end
+Settings.load()
+Menu.setRoot(Loader.load("ui.pages.main"))
 
 Crabe.Mod.register({
     id = "crabemenu",
@@ -62,25 +56,34 @@ Crabe.Mod.register({
     version = Config.VERSION,
 
     onInit = function()
-        Crabe.write(string.format("[CrabeMenu] v%s ready (F5: menu, F6: overlay)", Config.VERSION))
+        if not canDraw then
+            Crabe.write("[CrabeMenu] this CrabeLoader has no ImGui.DrawText: update bink2w32.dll (deploy.ps1 -Full)")
+            return
+        end
+        Crabe.write(string.format("[CrabeMenu] v%s ready (F5 or RB + D-pad left: menu, F6: overlay)", Config.VERSION))
     end,
 
     onUpdate = function(dt)
         dt = dt or FALLBACK_FRAME_TIME
         State.gameClock = State.gameClock + dt
-        pollKeys()
+        if canDraw then Menu.update(dt) end
+        if Input.overlayToggled() then
+            State.toggleOverlay()
+            Settings.save()
+        end
         Cheats.onTick()
         Overlay.update(dt)
         if State.isMenuOpen or State.isOverlayOpen then PlayerModule.updateLiveInfo() end
     end,
 
     onDraw = function()
-        if State.isMenuOpen then Menu.render() end
+        if not canDraw then return end
+        Menu.render()
         if State.isOverlayOpen then Overlay.render() end
     end,
 
     onShutdown = function()
-        State.setMenuOpen(false)
+        Menu.setOpen(false)
         State.isOverlayOpen = false
     end,
 })
