@@ -1,8 +1,8 @@
 {
   "name": "CrabeMenu",
-  "version": "1.0.0",
+  "version": "2.1.0",
   "minLoaderVersion": "0.2.0",
   "author": "Lucas Lhomme",
-  "description": "In-game mod menu (F5) for Disney Infinity 3.0: money, player, characters, cheats, world, camera, unlocks, spawn, settings and saves.",
+  "description": "In-game mod menu (F5) for Disney Infinity 3.0: heroes, spawners, animations, cheats, world, multiplayer and settings.",
   "entry": "main.lua"
 }

@@ -1,0 +1,11 @@
+modules/freecam.lua
+
+
+# Temporary files & Logs
+*.log
+mods/target_ip.txt
+target_ip.txt
+
+# IDE & Editor configs
+.vscode/
+.idea/
