@@ -41,6 +41,7 @@ local Menu = Loader.load("ui.menu")
 local Overlay = Loader.load("ui.overlay")
 local Cheats = Loader.load("modules.cheats")
 local PlayerModule = Loader.load("modules.player")
+local PlaysetBypass = Loader.load("modules.playset_bypass")
 
 local FALLBACK_FRAME_TIME = 0.016
 
@@ -48,6 +49,7 @@ local canDraw = type(ImGui) == "table" and type(ImGui.DrawText) == "function"
     and type(ImGui.GetDisplaySize) == "function"
 
 Settings.load()
+PlaysetBypass.init()
 Menu.setRoot(Loader.load("ui.pages.main"))
 
 Crabe.Mod.register({
@@ -72,6 +74,7 @@ Crabe.Mod.register({
             Settings.save()
         end
         Cheats.onTick()
+        PlaysetBypass.onTick()
         Overlay.update(dt)
         if State.isMenuOpen or State.isOverlayOpen then PlayerModule.updateLiveInfo() end
     end,

@@ -24,7 +24,7 @@ end
 
 local function inventoryPage(title, source)
     return List.page(title, source, {
-        fields = { "label", "id", "category" },
+        fields = { "label", "id", "category", "mod" },
         toItem = spawnItem,
         emptyLabel = "Nothing scanned yet",
         emptyHint = NOT_SCANNED_HINT,
@@ -33,6 +33,7 @@ end
 
 local npcPage = inventoryPage("NPCs & Enemies", function() return Spawner.npcs end)
 local objectPage = inventoryPage("Objects & Vehicles", function() return Spawner.objects end)
+local moddedPage = inventoryPage("Modded", function() return Spawner.modded end)
 
 local weaponItems = nil
 
@@ -71,6 +72,8 @@ local ITEMS = {
         countOf(function() return Spawner.npcs end)),
     Items.submenu("Objects & Vehicles", objectPage, "Every placeable object from the scan",
         countOf(function() return Spawner.objects end)),
+    Items.submenu("Modded", moddedPage, "Scanned entries a mod reskins, tagged with the mod's name",
+        countOf(function() return Spawner.modded end)),
     Items.submenu("Weapons & Tools", weaponsPage, "Equip any weapon or tool"),
     Items.action("Clear placed objects", Spawner.clearPlaced, "Removes the objects and ghosts the editor placed"),
 }

@@ -1,6 +1,6 @@
 local Config = {}
 
-Config.VERSION = "1.0.0"
+Config.VERSION = "1.1.0"
 Config.NAME = "CrabeMenu"
 Config.AUTHOR = "Lucas Lhomme"
 Config.SETTINGS_FILE = "crabemenu_settings.json"

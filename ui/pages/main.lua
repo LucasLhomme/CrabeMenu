@@ -17,6 +17,7 @@ for _, item in ipairs({
     optional("Camera", "ui.pages.world", "Free camera and teleport", "modules.freecam") or false,
     optional("Multiplayer", "ui.pages.multiplayer", "Host or join a Toy Box session",
         "modules.multiplayer", "ui.pages.multiplayer") or false,
+    Items.submenu("Mods", Loader.load("ui.pages.mods"), "Menus added by your other mods (Disney Infinity Complete, Radahn...)"),
     Items.submenu("Settings", Loader.load("ui.pages.settings"), "Menu side and size, overlay, video"),
 }) do
     if item then ITEMS[#ITEMS + 1] = item end

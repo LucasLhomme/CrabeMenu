@@ -36,16 +36,26 @@ choice are saved to `crabemenu_settings.json`.
 
 | Page | What it does |
 |---|---|
-| **Player & Heroes** | Swap character (Star Wars, Marvel, Disney, custom heroes), level up, max level, refill health, Sparks |
-| **Spawners** | Scan the world inventory, spawn NPCs and objects (searchable), equip weapons from the loader catalog, clear placed objects |
+| **Player & Heroes** | Swap character (Star Wars, Marvel, Disney, custom heroes), **any character in any playset**, level up, max level, refill health, Sparks |
+| **Spawners** | Scan the world inventory, spawn NPCs and objects (searchable), a **Modded** list of the entries a mod reskins (tagged `[Mod name]`), equip weapons from the loader catalog, clear placed objects |
 | **Animations** | The 7,784 choreographies of `Game.ListChoreographies()` by category, searchable, or play one by name |
 | **Cheats** | God Mode (x86 code caves), game speed (needs `Crabe.GameSpeed`), Toy Box editor unlock |
 | **Camera** | Free camera and teleport, when `modules/freecam.lua` is present |
+| **Mods** | The menus other mods declare through `Crabe.Menu` (Disney Infinity Complete warps, Radahn spawns, ...) |
 | **Settings** | Menu side and size, overlay, video options, credits |
 
 Multiplayer and the free camera are kept out of the repository (`.gitignore`); the menu shows their pages only
 when their files are there. The animation list comes from CrabeLoader's catalog, so nothing scans the game folder
 at run time (the old `io.popen` scan froze the game for seconds).
+
+**Any character in any playset** is AaBysT's *Anyone Can Cook II* patch, native here: eleven barriers flipped by
+signature (character validation, the four forced playset characters, brand lookup, avatar validity, playset matching,
+the missing-figure popup, the grid's zone and lock filters), plus a Lua layer re-applied every tick. On by default;
+the choice is saved in `crabemenu_settings.json`, and switching it off writes the original bytes back. Disney Infinity
+Complete defers to this copy when CrabeMenu is installed.
+
+A **Modded** spawner entry is one whose asset file a mod shadows in the VFS (needs a CrabeLoader with `Crabe.Vfs.list`).
+A reskin keeps the game's item id, so the list shows the vanilla name followed by the mod's name.
 
 Every action reports its real outcome in the footer. A failing native shows an error and is written to
 `loader.log`; nothing is announced as done unless it was.

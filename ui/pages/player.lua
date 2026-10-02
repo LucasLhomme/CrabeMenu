@@ -3,6 +3,8 @@ local State = Loader.load("core.state")
 local Items = Loader.load("ui.items")
 local PlayerModule = Loader.load("modules.player")
 local Cheats = Loader.load("modules.cheats")
+local PlaysetBypass = Loader.load("modules.playset_bypass")
+local Settings = Loader.load("core.settings")
 
 local ROUTES = { "loadout", "legacy" }
 local ROUTE_LABELS = { "Loadout", "Legacy" }
@@ -54,6 +56,12 @@ local ITEMS = {
     Items.info("Current hero", function() return State.avatarName end,
         function() return "SKU " .. tostring(State.avatarSku) end),
     Items.submenu("Change hero", heroesPage, "Swap to any figure, modded heroes included"),
+    Items.toggle("Any character in any playset", PlaysetBypass.isEnabled,
+        function(on)
+            PlaysetBypass.setEnabled(on)
+            Settings.save()
+        end,
+        "Lifts the 11 playset barriers (AaBysT's Anyone Can Cook II); off restores the original game"),
     Items.section("Progression"),
     Items.action("Level up +1", PlayerModule.levelUp, "Raises the current hero by one level"),
     Items.action("Max level", PlayerModule.maxProgression, "Sets the current hero to level 20"),

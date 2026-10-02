@@ -22,6 +22,7 @@ local State = {
     spawnCount = 1,
     godLocked = false,
     editorUnlocked = false,
+    -- playsetBypass stays nil until the player picks; modules.playset_bypass reads nil as on.
 
     menuSide = "left",
     scaleIndex = 2,
