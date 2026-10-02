@@ -50,7 +50,7 @@ local ITEMS = {
     Items.action("Go to main menu", leave(WorldModule.goToMainMenu),
         "Back to the world select; the game saves first, like Quit in the pause menu"),
     Items.action("Return to hub", leave(WorldModule.returnToHub), "Back to this playset's or Toy Box's hub"),
-    Items.submenu("Travel to a world", travelPage, "Any world of the game's zone list, test maps included",
+    Items.submenu("Travel to a world", travelPage, "Any base-game world: Toy Box, Speedway and the four playsets",
         tostring(#allRows)),
 }
 
