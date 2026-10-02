@@ -53,14 +53,12 @@ function WorldModule.goToMainMenu()
     end
     if not leaveAllowed() then return false end
     releaseFreeCam()
-    local exitGame = function() Crabe.native("Pause_ExitGame", "Go to main menu")() end
-    if not Native.run("Go to main menu", exitGame) then return false end
+    if not Native.run("Game.QuitToMainMenu", Game.QuitToMainMenu) then return false end
     State.setStatus("Going to the main menu...", "success")
     return true
 end
 
---- Sends the player back to the hub world. UI_ReturnToHub takes the player
---- number, as pausemenu.lua passes it. Returns true when the request was sent.
+--- Sends the player back to the hub world. Returns true when the request was sent.
 function WorldModule.returnToHub()
     if inFrontEnd() then
         State.setStatus("No hub from the main menu: load a world first", "warning")
@@ -68,9 +66,35 @@ function WorldModule.returnToHub()
     end
     if not leaveAllowed() then return false end
     releaseFreeCam()
-    local toHub = function() Crabe.native("UI_ReturnToHub", "Return to hub")(Crabe.hostPlayer()) end
-    if not Native.run("Return to hub", toHub) then return false end
+    if not Native.run("Game.ReturnToHub", Game.ReturnToHub) then return false end
     State.setStatus("Returning to the hub...", "success")
+    return true
+end
+
+-- A world the game refuses (UI_CanTransitionToLevel) is only forced on a
+-- second press within this window: a forced transition can leave the session
+-- on a loading screen with no way back, so it is never a single press.
+local FORCE_WINDOW = 5
+local forceArmed = { name = nil, at = -FORCE_WINDOW }
+
+--- Loads any world of the zone list by name. One the game accepts loads at
+--- once; one it refuses asks for a second press, which forces it.
+--- Returns true when the load was requested.
+function WorldModule.travelTo(name)
+    local allowed = Native.poll(Game.CanLoadLevel, name) == true
+    local confirmed = forceArmed.name == name and State.gameClock - forceArmed.at < FORCE_WINDOW
+    if not allowed and not confirmed then
+        forceArmed.name, forceArmed.at = name, State.gameClock
+        State.setStatus("The game refuses " .. name .. ": select it again within 5 s to force it (may get stuck loading)",
+            "warning")
+        return false
+    end
+
+    if not leaveAllowed() then return false end
+    forceArmed.name = nil
+    releaseFreeCam()
+    if not Native.run("Game.LoadLevel", Game.LoadLevel, name, not allowed) then return false end
+    State.setStatus((allowed and "Loading " or "Forcing ") .. name .. "...", allowed and "success" or "warning")
     return true
 end
 
