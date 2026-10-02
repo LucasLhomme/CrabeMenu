@@ -40,7 +40,7 @@ choice are saved to `crabemenu_settings.json`.
 | **Spawners** | Scan the world inventory, spawn NPCs and objects (searchable), a **Modded** list of the entries a mod reskins (tagged `[Mod name]`), equip weapons from the loader catalog, clear placed objects |
 | **Animations** | The 7,784 choreographies of `Game.ListChoreographies()` by category, searchable, or play one by name |
 | **Cheats** | God Mode (x86 code caves), game speed (needs `Crabe.GameSpeed`), Toy Box editor unlock |
-| **Camera** | Free camera and teleport, when `modules/freecam.lua` is present |
+| **World** | Go to the main menu (world select, the pause menu's Quit without its popup), return to the hub; free camera and teleport when `modules/freecam.lua` is present |
 | **Mods** | The menus other mods declare through `Crabe.Menu` (Disney Infinity Complete warps, Radahn spawns, ...) |
 | **Settings** | Menu side and size, overlay, video options, credits |
 

@@ -17,6 +17,63 @@ WorldModule.VIDEO_OPTIONS = {
     { key = "DepthOfField", label = "Depth of Field" },
 }
 
+-- Each of these starts a level transition, and a held key or a double press
+-- can reach them twice: a second request inside this window is dropped.
+local LEAVE_COOLDOWN = 5
+local lastLeave = -LEAVE_COOLDOWN
+
+local function leaveAllowed()
+    if State.gameClock - lastLeave < LEAVE_COOLDOWN then
+        State.setStatus("Already leaving, wait for the transition", "warning")
+        return false
+    end
+    lastLeave = State.gameClock
+    return true
+end
+
+-- The free camera holds the game camera; it is handed back before the world goes away.
+local function releaseFreeCam()
+    if not Loader.exists("modules.freecam") then return end
+    local FreeCam = Loader.load("modules.freecam")
+    if FreeCam.isActive() then FreeCam.toggle() end
+end
+
+local function inFrontEnd()
+    local world = Native.poll(Game.CurrentWorld)
+    return type(world) == "string" and world:lower() == "frontend"
+end
+
+--- Leaves the current world for the main menu and its world select: the pause
+--- menu's own Quit (pausemenu.lua PauseExit) without its popup. The game
+--- autosaves first. Returns true when the request was sent.
+function WorldModule.goToMainMenu()
+    if inFrontEnd() then
+        State.setStatus("Already in the main menu", "info")
+        return false
+    end
+    if not leaveAllowed() then return false end
+    releaseFreeCam()
+    local exitGame = function() Crabe.native("Pause_ExitGame", "Go to main menu")() end
+    if not Native.run("Go to main menu", exitGame) then return false end
+    State.setStatus("Going to the main menu...", "success")
+    return true
+end
+
+--- Sends the player back to the hub world. UI_ReturnToHub takes the player
+--- number, as pausemenu.lua passes it. Returns true when the request was sent.
+function WorldModule.returnToHub()
+    if inFrontEnd() then
+        State.setStatus("No hub from the main menu: load a world first", "warning")
+        return false
+    end
+    if not leaveAllowed() then return false end
+    releaseFreeCam()
+    local toHub = function() Crabe.native("UI_ReturnToHub", "Return to hub")(Crabe.hostPlayer()) end
+    if not Native.run("Return to hub", toHub) then return false end
+    State.setStatus("Returning to the hub...", "success")
+    return true
+end
+
 --- Returns whether a video option is enabled, or nil if it cannot be read.
 --- The engine is queried at most every VIDEO_REFRESH seconds, not every frame.
 function WorldModule.isVideoEnabled(key)

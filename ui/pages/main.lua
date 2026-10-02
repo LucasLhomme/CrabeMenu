@@ -14,7 +14,7 @@ for _, item in ipairs({
     Items.submenu("Spawners", Loader.load("ui.pages.spawners"), "Spawn NPCs, objects, weapons and tools"),
     Items.submenu("Animations", Loader.load("ui.pages.animations"), "Play any of the game's choreographies on your hero"),
     Items.submenu("Cheats", Loader.load("ui.pages.cheats"), "God mode, game speed, Toy Box editor"),
-    optional("Camera", "ui.pages.world", "Free camera and teleport", "modules.freecam") or false,
+    Items.submenu("World", Loader.load("ui.pages.world"), "Main menu (world select), hub, free camera"),
     optional("Multiplayer", "ui.pages.multiplayer", "Host or join a Toy Box session",
         "modules.multiplayer", "ui.pages.multiplayer") or false,
     Items.submenu("Mods", Loader.load("ui.pages.mods"), "Menus added by your other mods (Disney Infinity Complete, Radahn...)"),
