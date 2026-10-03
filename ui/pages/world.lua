@@ -4,6 +4,7 @@ local Menu = Loader.load("ui.menu")
 local WorldModule = Loader.load("modules.world")
 local List = Loader.load("ui.pages.list")
 local CATALOG = Loader.load("modules.world_catalog")
+local SKIES = Loader.load("modules.sky_catalog")
 
 -- Leaving a world closes the menu: it would otherwise keep the keys and the
 -- pad away from the game through the loading screen and the world select.
@@ -46,12 +47,47 @@ local travelPage = {
     items = function() return travelItems end,
 }
 
+local function skyItem(row)
+    return Items.action(row.name, function() WorldModule.loadSky(row.name) end,
+        "Loads the realm " .. row.name .. " as the sky and lighting; it stays until the world reloads", row.group)
+end
+
+local function skyPage(title, rows)
+    return List.page(title, function() return rows end, {
+        fields = { "name", "group" },
+        toItem = skyItem,
+        emptyLabel = "No sky here",
+    })
+end
+
+local allSkies = {}
+local skyItems = {}
+for _, group in ipairs(SKIES) do
+    local rows = {}
+    for _, name in ipairs(group.realms) do
+        local row = { name = name, group = group.title }
+        rows[#rows + 1] = row
+        allSkies[#allSkies + 1] = row
+    end
+    skyItems[#skyItems + 1] = Items.submenu(group.title, skyPage(group.title, rows),
+        "Every " .. group.title:lower() .. " realm", tostring(#rows))
+end
+table.insert(skyItems, 1, Items.submenu("Search every sky", skyPage("All skies", allSkies),
+    "Type part of a name, e.g. night, sunset or storm", tostring(#allSkies)))
+
+local skyPickerPage = {
+    title = "Skybox",
+    items = function() return skyItems end,
+}
+
 local ITEMS = {
     Items.action("Go to main menu", leave(WorldModule.goToMainMenu),
         "Back to the world select; the game saves first, like Quit in the pause menu"),
     Items.action("Return to hub", leave(WorldModule.returnToHub), "Back to this playset's or Toy Box's hub"),
     Items.submenu("Travel to a world", travelPage, "Any base-game world: Toy Box, Speedway and the four playsets",
         tostring(#allRows)),
+    Items.submenu("Skybox", skyPickerPage, "Swap the sky and lighting of this world for any realm the game ships",
+        tostring(#allSkies)),
 }
 
 -- The free camera ships outside the repository; its rows exist only with it.

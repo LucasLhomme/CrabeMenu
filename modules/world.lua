@@ -71,6 +71,24 @@ function WorldModule.returnToHub()
     return true
 end
 
+--- Replaces the sky and its lighting with a realm of realms/realmlist.lua. The engine keeps it
+--- until the world is reloaded: nothing hands back the world's own sky. Returns true when loaded.
+function WorldModule.loadSky(realm)
+    if inFrontEnd() then
+        State.setStatus("No sky in the main menu: load a world first", "warning")
+        return false
+    end
+
+    local ok, loaded = Native.run("Game.LoadSkyDome", Game.LoadSkyDome, realm)
+    if not ok then return false end
+    if loaded ~= true then
+        State.setStatus("The engine refused the sky " .. realm, "warning")
+        return false
+    end
+    State.setStatus("Sky: " .. realm .. " (stays until the world reloads)", "success")
+    return true
+end
+
 -- A world the game refuses (UI_CanTransitionToLevel) is only forced on a
 -- second press within this window: a forced transition can leave the session
 -- on a loading screen with no way back, so it is never a single press.
