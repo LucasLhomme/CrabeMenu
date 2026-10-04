@@ -204,6 +204,8 @@ end
 
 local function drawBanner(x, y, w)
     local h = L.BANNER_HEIGHT
+    if Theme.image(Config.BANNER_IMAGE, x, y, w, h) then return end
+
     Theme.gradient(x, y, w, h, Theme.color("royal", 250), Theme.color("violet", 250), true)
     Theme.gradient(x, y + h * 0.4, w, h * 0.6, Theme.color("night", 0), Theme.color("night", 150))
 

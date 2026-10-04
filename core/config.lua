@@ -4,6 +4,7 @@ Config.VERSION = "1.0.0"
 Config.NAME = "CrabeMenu"
 Config.AUTHOR = "Lucas Lhomme"
 Config.SETTINGS_FILE = "crabemenu_settings.json"
+Config.BANNER_IMAGE = "mods/crabemenu/ui/CrabeMenu.png"
 
 local VK = {
     BACKSPACE = 0x08, TAB = 0x09, ENTER = 0x0D, SHIFT = 0x10, ESCAPE = 0x1B, SPACE = 0x20,

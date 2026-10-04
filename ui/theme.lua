@@ -57,6 +57,14 @@ function Theme.gradient(x, y, w, h, from, to, horizontal)
     ImGui.DrawGradient(sx(x), sy(y), w * scale, h * scale, from, to, horizontal == true)
 end
 
+--- Draws an image file stretched over the box. Returns false when this loader has
+--- no ImGui.DrawImage, so the caller can draw something else instead.
+function Theme.image(path, x, y, w, h, alpha)
+    if type(ImGui.DrawImage) ~= "function" then return false end
+    ImGui.DrawImage(path, sx(x), sy(y), w * scale, h * scale, Theme.color("white", alpha))
+    return true
+end
+
 function Theme.line(x1, y1, x2, y2, color, thickness)
     ImGui.DrawLine(sx(x1), sy(y1), sx(x2), sy(y2), color, math.max(1, (thickness or 1) * scale))
 end
