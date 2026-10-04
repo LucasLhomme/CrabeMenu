@@ -1,0 +1,131 @@
+name: CI - Package & Release
+
+# Every push and pull request checks the mod and builds its zip. A merge into main
+# also prepares the release: it is created as a DRAFT (and flagged pre-release),
+# visible to maintainers only, until one publishes it by hand on GitHub. While it
+# stays a draft, every merge into main rebuilds it; once published it is frozen
+# and later merges leave it alone. Bump "version" in mod.json to release again.
+on:
+  push:
+    branches:
+      - main
+      - "feature/**"
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: Package CrabeMenu
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.manifest.outputs.version }}
+      tag: ${{ steps.manifest.outputs.tag }}
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Check Lua syntax (Lua 5.1, the game's engine)
+        run: |
+          sudo apt-get install -y --no-install-recommends lua5.1
+          find . -name '*.lua' -not -path './.git/*' -print0 | xargs -0 -n1 luac5.1 -p
+
+      - name: Read mod.json
+        id: manifest
+        run: |
+          VER=$(python3 -c 'import json; print(json.load(open("mod.json", encoding="utf-8"))["version"])')
+          ENTRY=$(python3 -c 'import json; print(json.load(open("mod.json", encoding="utf-8"))["entry"])')
+          if [[ ! "${VER}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::mod.json version must look like 1.2.3, found '${VER}'."
+            exit 1
+          fi
+          if [ ! -f "${ENTRY}" ]; then
+            echo "::error::mod.json entry '${ENTRY}' does not exist."
+            exit 1
+          fi
+          echo "version=${VER}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${VER}" >> "$GITHUB_OUTPUT"
+
+      - name: Build the zip
+        run: |
+          # Same items as deploy.ps1, inside a crabemenu/ folder that unzips into the game's mods/.
+          mkdir -p package/crabemenu
+          cp -r mod.json main.lua core ui modules package/crabemenu/
+          find package -name '*.lua' -exec sed -i '1s/^\xEF\xBB\xBF//' {} +
+
+          cat > package/README.txt <<'ENDREADME'
+          CrabeMenu for Disney Infinity 3.0 (Gold Edition)
+          ================================================
+
+          Requires CrabeLoader. Unzip the 'crabemenu' folder into the game's 'mods' folder
+          (next to DisneyInfinity3.exe), so you end up with mods/crabemenu/main.lua.
+
+          In-game: F5 opens the menu, or RB + D-pad left on a controller.
+          ENDREADME
+
+          ZIP="CrabeMenu-${{ steps.manifest.outputs.tag }}.zip"
+          (cd package && zip -r "../${ZIP}" .)
+          sha256sum "${ZIP}" > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          unzip -l "${ZIP}" | tail -n 1
+
+      - name: Upload the zip
+        uses: actions/upload-artifact@v4
+        with:
+          name: CrabeMenu-${{ steps.manifest.outputs.tag }}
+          path: |
+            CrabeMenu-${{ steps.manifest.outputs.tag }}.zip
+            SHA256SUMS.txt
+
+  release:
+    name: Prepare the draft release
+    needs: package
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: release
+      cancel-in-progress: false
+
+    steps:
+      - name: Download the zip
+        uses: actions/download-artifact@v4
+        with:
+          name: CrabeMenu-${{ needs.package.outputs.tag }}
+
+      - name: Look for an existing published release
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ needs.package.outputs.tag }}"
+          PUBLISHED=$(gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"${TAG}\" and (.draft | not))] | length")
+          if [[ "${PUBLISHED}" != "0" ]]; then
+            echo "::notice::${TAG} is already published. Bump the version in mod.json to release a new one."
+            echo "release=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare GitHub Release (draft)
+        if: steps.decide.outputs.release == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.package.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: CrabeMenu ${{ needs.package.outputs.tag }}
+          draft: true
+          prerelease: true
+          generate_release_notes: true
+          body: |
+            **Draft, visible to maintainers only.** Check the zip in the game, then publish and untick "Set as a pre-release".
+          files: |
+            CrabeMenu-${{ needs.package.outputs.tag }}.zip
+            SHA256SUMS.txt
