@@ -48,11 +48,12 @@ Multiplayer and the free camera are kept out of the repository (`.gitignore`); t
 when their files are there. The animation list comes from CrabeLoader's catalog, so nothing scans the game folder
 at run time (the old `io.popen` scan froze the game for seconds).
 
-**Any character in any playset** is AaBysT's *Anyone Can Cook II* patch, native here: eleven barriers flipped by
-signature (character validation, the four forced playset characters, brand lookup, avatar validity, playset matching,
-the missing-figure popup, the grid's zone and lock filters), plus a Lua layer re-applied every tick. On by default;
-the choice is saved in `crabemenu_settings.json`, and switching it off writes the original bytes back. Disney Infinity
-Complete defers to this copy when CrabeMenu is installed.
+**Any character in any playset** is AaBysT's *Anyone Can Cook II* patch integrated natively:
+- **Native layer**: ten barriers flipped by signature (character validation, the four forced playset characters, brand lookup, avatar validity, playset matching, the missing-figure popup, the grid's zone filter); the category filter is preserved so figures remain cleanly separated and sorted by franchise.
+- **Data transplantation layer**: chunk patches (`Crabe.Hooks.patchChunk`) for `DataMap`, `ActorList`, and bitmasks across the 4 story playsets (The Clone Wars, Rise Against the Empire, The Force Awakens, Inside Out), plus dynamic loading of `munitions_toybox.lua` to fix infinite loading screens and missing character abilities/weapons/projectiles.
+- **Lua layer**: re-applied every tick (brand lookup, character grid hardening, Finding Dory catalog tagging).
+On by default; the choice is saved in `crabemenu_settings.json`, and switching it off writes the original bytes back.
+Disney Infinity Complete defers to this copy when CrabeMenu is installed.
 
 A **Modded** spawner entry is one whose asset file a mod shadows in the VFS (needs a CrabeLoader with `Crabe.Vfs.list`).
 A reskin keeps the game's item id, so the list shows the vanilla name followed by the mod's name.
