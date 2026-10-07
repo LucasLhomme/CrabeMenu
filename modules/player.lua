@@ -32,7 +32,7 @@ function PlayerModule.getRoster()
     for _, franchise in ipairs(PlayerModule.FRANCHISES) do
         local characters = Native.poll(Game.ListCharacters, franchise.key)
         if characters and #characters > 0 then
-            table.sort(characters, byName)
+            if franchise.key == "custom" then table.sort(characters, byName) end
             roster[#roster + 1] = { title = franchise.title, characters = characters }
         end
     end

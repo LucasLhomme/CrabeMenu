@@ -61,7 +61,7 @@ local ITEMS = {
             PlaysetBypass.setEnabled(on)
             Settings.save()
         end,
-        "Lifts playset barriers while preserving categories; off restores the original game"),
+        "Lifts the 11 playset barriers (AaBysT's Anyone Can Cook II); off restores the original game"),
     Items.section("Progression"),
     Items.action("Level up +1", PlayerModule.levelUp, "Raises the current hero by one level"),
     Items.action("Max level", PlayerModule.maxProgression, "Sets the current hero to level 20"),
