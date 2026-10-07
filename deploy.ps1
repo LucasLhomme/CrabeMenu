@@ -33,10 +33,13 @@ foreach ($item in $menuItems) {
 Remove-Bom $menuTarget
 Write-Host "[OK] CrabeMenu -> $menuTarget" -ForegroundColor Green
 
-$legacyMenu = Join-Path $modsTarget "crabemenu.lua"
-if (Test-Path $legacyMenu) {
-    Remove-Item -Path $legacyMenu -Force
-    Write-Host "[OK] Removed legacy $legacyMenu (it would load the menu twice)" -ForegroundColor Green
+$legacyMods = @("crabemenu.lua", "playable_anywhere")
+foreach ($old in $legacyMods) {
+    $path = Join-Path $modsTarget $old
+    if (Test-Path $path) {
+        Remove-Item -Path $path -Recurse -Force
+        Write-Host "[OK] Removed legacy $path (feature is built into CrabeMenu)" -ForegroundColor Green
+    }
 }
 
 if (-not $Full) {

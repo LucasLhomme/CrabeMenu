@@ -1,21 +1,19 @@
 local Loader = ...
 local State = Loader.load("core.state")
 
--- "Any Character in Any Playset": AaBysT's "Anyone Can Cook II" exe patch,
--- ported to CrabeLoader (first in Disney Infinity Complete, now owned here).
--- Eleven native barriers, each found by signature and flipped in memory:
---   S1    ValidateCurrentCharacter no longer resets the character (jnz -> jmp)
---   S2-S5 no forced playset character (Empire / InsideOut / TheCloneWars / PlaysetX)
---   S6    VirtualReaderPC_GetBrandFromCurrentPlaySet returns nothing (Lua sees nil)
---   S7    IGPGameFlow::IsAvatarValid returns true (no brand/playset validity check)
---   S8    IGPGameFlow::IsMatchingPlaysets returns true (any character in any playset)
---   S9    IGPGameFlow::MissingAvatarCheck skips the DialogType_MissingAvatarQuit popup
---   S10   VirtualReaderPC_GetItemByPage: zone filter off (every character listed)
---   S11   VirtualReaderPC_GetItemByPage: lock filter off (every character selectable)
--- plus a Lua layer, re-applied every tick because the game reloads these
--- globals with its screens: the Lua brand lookup returns nil, the character
--- grid is hardened against the tables the disabled filters no longer fill,
--- and every catalog row is tagged for the Finding Dory filter.
+-- "Any Character in Any Playset": AaBysT's "Anyone Can Cook II" patch,
+-- ported to CrabeLoader with full runtime data transplantation.
+-- Three complementary layers:
+-- 1. Native layer: eleven barriers found by signature and flipped in memory
+--    (ValidateCurrentCharacter, forced playset character, brand checks, avatar validity,
+--    missing avatar quit popup, item filters).
+-- 2. Data layer: dynamic chunk patches (Crabe.Hooks.patchChunk) for DataMap,
+--    ActorList, bitmasks, and MunitionsTable across all four Play Sets (The Clone Wars,
+--    Empire, The Force Awakens, Inside Out). Ensures character assets, toolsets,
+--    projectiles and group memberships exist in memory, preventing infinite loading
+--    and missing item abilities.
+-- 3. Lua layer: VirtualReader brand lookup override, character grid hardening,
+--    and Finding Dory catalog tagging.
 
 local PlaysetBypass = {}
 
@@ -182,6 +180,50 @@ local function removeLuaLayer()
     brandOriginal = nil
 end
 
+-- Data layer -----------------------------------------------------------------
+
+local PLAYSETS = {
+    { id = "theclonewars", package = "TheCloneWars" },
+    { id = "empire",       package = "Empire" },
+    { id = "playsetx",     package = "PlaysetX" },
+    { id = "insideout",    package = "InsideOut" },
+}
+
+local dataPatchesRegistered = false
+
+local function registerDataPatches()
+    if dataPatchesRegistered then return end
+    if not (Crabe.Hooks and type(Crabe.Hooks.patchChunk) == "function") then
+        log("Crabe.Hooks.patchChunk not available, skipping data layer")
+        return
+    end
+
+    local datamapParts = {}
+    local actorlistParts = {}
+
+    for _, p in ipairs(PLAYSETS) do
+        local okDm, dm = pcall(Loader.load, "modules.playset_patches." .. p.id .. "_datamap")
+        local okAl, al = pcall(Loader.load, "modules.playset_patches." .. p.id .. "_actorlist")
+        local okBm, bm = pcall(Loader.load, "modules.playset_patches." .. p.id .. "_bitmasks")
+
+        if okDm and type(dm) == "string" then datamapParts[#datamapParts + 1] = dm end
+        if okAl and type(al) == "string" then actorlistParts[#actorlistParts + 1] = al end
+        if okBm and type(bm) == "string" then
+            Crabe.Hooks.patchChunk("Package = '" .. p.package .. "'", bm)
+        end
+    end
+
+    if #datamapParts > 0 then
+        Crabe.Hooks.patchChunk("DataMap", table.concat(datamapParts, "\n"))
+    end
+    if #actorlistParts > 0 then
+        Crabe.Hooks.patchChunk("ActorList", table.concat(actorlistParts, "\n"))
+    end
+
+    dataPatchesRegistered = true
+    log(string.format("DataMap, ActorList, bitmasks and munitions patches registered for %d Play Sets", #PLAYSETS))
+end
+
 -- Public API -----------------------------------------------------------------
 
 --- Reports whether the barriers are currently lifted.
@@ -194,12 +236,17 @@ function PlaysetBypass.patchCount()
     return patched, total
 end
 
---- Lifts (true) or restores (false) the eleven barriers and the Lua layer.
+--- Lifts (true) or restores (false) the eleven barriers, the Lua layer and the data layer.
 --- The choice is kept in State.playsetBypass for core.settings to save.
 function PlaysetBypass.setEnabled(on)
     on = on == true
     patched = writeAll(on)
-    if on then applyLuaLayer() else removeLuaLayer() end
+    if on then
+        registerDataPatches()
+        applyLuaLayer()
+    else
+        removeLuaLayer()
+    end
     enabled = on
     State.playsetBypass = on
 
