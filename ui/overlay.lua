@@ -79,6 +79,14 @@ function Overlay.render()
     local x = onLeft and margin or (screenWidth / factor - margin - w)
     local y = margin
 
+    -- The Lua tick that feeds State.fps is throttled to ~60 Hz by the loader, so
+    -- it cannot show a frame rate above 60; the loader measures Present itself.
+    local renderFps = Crabe.GetRenderFps and Crabe.GetRenderFps() or 0
+    if renderFps > 0 then
+        State.fps = renderFps
+        State.frameTime = 1 / renderFps
+    end
+
     local health, healthColor = healthText()
     local rows = {
         { "Performance", string.format("%.0f FPS  (%.1f ms)", State.fps, State.frameTime * 1000), fpsColor() },
