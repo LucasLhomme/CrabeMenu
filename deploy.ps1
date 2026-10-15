@@ -25,8 +25,11 @@ if (!(Test-Path $gameDir)) {
 
 if (!(Test-Path $modsTarget)) { New-Item -ItemType Directory -Force -Path $modsTarget | Out-Null }
 
-if (Test-Path $menuTarget) { Remove-Item -Path $menuTarget -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $menuTarget | Out-Null
+if (Test-Path $menuTarget) {
+    Get-ChildItem -Path $menuTarget -Force | Remove-Item -Recurse -Force
+} else {
+    New-Item -ItemType Directory -Force -Path $menuTarget | Out-Null
+}
 foreach ($item in $menuItems) {
     Copy-Item -Path (Join-Path $PSScriptRoot $item) -Destination $menuTarget -Recurse -Force
 }

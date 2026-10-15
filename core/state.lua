@@ -36,6 +36,7 @@ local function applyCapture()
     if not State.isMenuOpen then
         Crabe.Input.captureKeys(nil)
         if Crabe.Input.capturePad then Crabe.Input.capturePad(false) end
+        if Crabe.Input.captureDirectInput then Crabe.Input.captureDirectInput(false) end
         if State._controlsLockedByMenu and Crabe.Input.clearRemap then
             State._controlsLockedByMenu = false
             Crabe.Input.clearRemap()
@@ -45,6 +46,8 @@ local function applyCapture()
 
     local keys = {}
     if State.lockControls then
+        if Crabe.Input.captureDirectInput then Crabe.Input.captureDirectInput(true) end
+        if Crabe.Input.capturePad then Crabe.Input.capturePad(true) end
         for code = 1, 255 do
             if code ~= Config.VK.F5 and code ~= Config.VK.F6 and code ~= 0x2D and code ~= 0x73 then
                 keys[#keys + 1] = code
@@ -57,6 +60,8 @@ local function applyCapture()
             end
         end
     else
+        if Crabe.Input.captureDirectInput then Crabe.Input.captureDirectInput(false) end
+        if Crabe.Input.capturePad then Crabe.Input.capturePad(false) end
         for _, code in ipairs(Config.NAV_KEYS) do keys[#keys + 1] = code end
         if State.isTyping then
             for _, code in ipairs(typingKeys) do keys[#keys + 1] = code end
@@ -67,7 +72,6 @@ local function applyCapture()
         end
     end
     Crabe.Input.captureKeys(keys)
-    if Crabe.Input.capturePad then Crabe.Input.capturePad(true) end
 end
 
 State.applyCapture = applyCapture
