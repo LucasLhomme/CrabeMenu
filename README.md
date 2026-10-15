@@ -8,7 +8,7 @@ All game access goes through the stable `Crabe.*` and `Game.*` APIs.
 
 ```powershell
 .\deploy.ps1          # copies the menu to mods\crabemenu\ and removes the legacy crabemenu.lua
-.\deploy.ps1 -Full    # also syncs bink2w32.dll, window_mode.lua, the hero pack, and removes obsolete game folders
+.\deploy.ps1 -Full    # also syncs dinput8.dll (and restores the game's bink2w32.dll left by a 1.0 install), window_mode.lua, the hero pack, and removes obsolete game folders
 ```
 
 The menu is a single list in the Disney Infinity colours: a banner, a breadcrumb with an `X / N` counter,

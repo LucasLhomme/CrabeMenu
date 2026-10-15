@@ -27,6 +27,12 @@ local function setOverlay(on)
     Settings.save()
 end
 
+local function setLockControls(on)
+    State.lockControls = (on == true)
+    if State.applyCapture then State.applyCapture() end
+    Settings.save()
+end
+
 local RESOLUTIONS = {
     { label = "1280x720 (720p)",  w = 1280, h = 720 },
     { label = "1280x800 (Deck)",  w = 1280, h = 800 },
@@ -101,6 +107,8 @@ local ITEMS = {
         "Which side of the screen the menu sits on"),
     Items.choice("Menu size", SCALE_LABELS, function() return State.scaleIndex end, setScale,
         "Makes the whole menu smaller or bigger"),
+    Items.toggle("Lock in-game controls", function() return State.lockControls end, setLockControls,
+        "Locks in-game movement and actions while the menu is open"),
     Items.toggle("Runtime overlay (F6)", function() return State.isOverlayOpen end, setOverlay,
         "Shows FPS, hero, health and active cheats in a corner"),
     Items.section("Video"),

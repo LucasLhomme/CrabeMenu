@@ -59,7 +59,7 @@ Crabe.Mod.register({
 
     onInit = function()
         if not canDraw then
-            Crabe.write("[CrabeMenu] this CrabeLoader has no ImGui.DrawText: update bink2w32.dll (deploy.ps1 -Full)")
+            Crabe.write("[CrabeMenu] this CrabeLoader has no ImGui.DrawText: update CrabeLoader (deploy.ps1 -Full)")
             return
         end
         Crabe.write(string.format("[CrabeMenu] v%s ready (F5 or RB + D-pad left: menu, F6: overlay)", Config.VERSION))
