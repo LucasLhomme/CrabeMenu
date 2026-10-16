@@ -71,6 +71,17 @@ Every action reports its real outcome in the footer. A failing native shows an e
 - **Game speed** is only available when the loader provides `Crabe.GameSpeed`. The current loader source does not,
   so the section shows a notice until the clock hook is restored.
 - **Spawners** need a loaded world: the engine has no inventory on the main menu.
+- **Needs CrabeLoader 1.1.0 or newer** for hero speed (`Game.SetActorSpeedScale`), level down (`Game.SetAvatarLevel`), the skill point
+  refund, the Play Set save resume and the input fixes; older loaders show those rows as unavailable or fall back to the old behaviour.
+- **Skill points at level 20** (75 by default, or 100, 150, 200) rewrites `mods/crabemenu/skilltrees/SkillPointsEarned.patch`, a chunk patch
+  CrabeLoader reads at startup: the game reads its level table once, so the new total applies the next time it starts, to every hero.
+- **Hero speed** scales the engine's movement multiplier; the engine rebuilds it when a world loads, so the menu sets it again by itself.
+- **One shot kill** zeroes the health of every entity but the hero on its first damage, bosses and allies included, and needs the hero to be
+  identified (take a hit, or use Lock To Damaged Target). **Stealth** and **No fall** set an ActorState on the hero, which the menu keeps in place.
+- **Level down** keeps the experience, so the next experience gained can raise the hero again; skills that no longer fit are refunded first
+  (the game allows two free refunds per figure).
+- **World travel** from outside a Play Set resumes that Play Set's save at the place it was saved, then moves to the zone you picked.
+  Starting a zone straight from the main menu would load it without any save, which replays cutscenes and relocks unlocked levels.
 - The Power Disc selector was removed: `Game.SetRoundCoins` / `SetHexCoins` take slot ids that are not documented,
   and the previous ids were placeholders.
 
@@ -78,9 +89,12 @@ Every action reports its real outcome in the footer. A failing native shows an e
 
 ```text
 mods/crabemenu/
+├── skilltrees/
+│   └── SkillPointsEarned.patch   written from Settings; raises the level 20 skill point total
 ├── mod.json
 ├── main.lua              entry point: loader bootstrap, lifecycle
 ├── core/
+│   ├── keybinds.lua      rebindable keys, read from and written to crabemenu_keybinds.json
 │   ├── loader.lua        module loader (cached per generation, runs modules in the mod's sandbox)
 │   ├── config.lua        version, keys, key repeat, layout sizes, menu scales
 │   ├── state.lua         shared state, footer status, key and controller capture
@@ -90,12 +104,13 @@ mods/crabemenu/
 │   └── util.lua          search filter, name formatting, IPv4 check
 ├── modules/              behavior, no drawing
 │   ├── player.lua  spawner.lua  weapons.lua  animations.lua  cheats.lua
-│   └── speedhack.lua  world.lua  freecam.lua  speedrun.lua  nofall.lua  stealth.lua  state_guard.lua  avatar.lua  (multiplayer.lua: optional, not in the repository)
+│   └── speedhack.lua  world.lua  freecam.lua  speedrun.lua  nofall.lua  stealth.lua  state_guard.lua  avatar.lua  skill_points.lua  (multiplayer.lua: optional, not in the repository)
 └── ui/                   drawing, no game logic
     ├── theme.lua         palette and the scaled drawing helpers (ImGui.Draw*)
     ├── items.lua         row kinds: action, toggle, submenu, choice, input, info, section
     ├── menu.lua          page stack, navigation, prompt, rendering
     ├── overlay.lua       F6 runtime card
+    ├── speedrun_hud.lua  speedrun panel: stopwatch, world, splits, position, hero speed
     └── pages/            one file per page; list.lua is the searchable list page
 ```
 
