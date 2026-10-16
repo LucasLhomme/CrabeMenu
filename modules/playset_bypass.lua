@@ -11,6 +11,10 @@ local State = Loader.load("core.state")
 --   S8    IGPGameFlow::IsMatchingPlaysets returns true (any character in any playset)
 --   S9    IGPGameFlow::MissingAvatarCheck skips the DialogType_MissingAvatarQuit popup
 --   S10   VirtualReaderPC_GetItemByPage: zone filter off (every character listed)
+--   S12   StandAloneLoop::LoadActorLists: loads every playset's actors.lua (native engine loop)
+--   S13   StandAloneLoop::LoadDataMaps: loads every playset's DataMap.lua & munitions (native engine loop)
+--   S14   CTool::IsAllowedInLevel: bypasses LevelPrefix restriction for 1.0 character innate ranged tools
+--   S15   GameplayDataMap::LoadGameplayDataMap: merges duplicate DataMap records across all playsets
 -- Note: S11 (previously "GridLockFilterBypass") is intentionally NOT applied and restored:
 --   it NOPped FilterMetaData, which broke category filtering and dumped every figure
 --   from all franchises into every category in disorder.
@@ -62,6 +66,22 @@ local SIGNATURES = {
       pattern = "56 8B CF E8 ?? ?? ?? ?? 84 C0 74 28 8D 44 24 64 50 8D 4C 24 58",
       patched = "56 8B CF E8 ?? ?? ?? ?? 84 C0 90 90 8D 44 24 64 50 8D 4C 24 58",
       original = "74 28", bytes = "90 90" },
+    { name = "S12 LoadAllActorLists", offset = 43,
+      pattern = "C6 45 54 00 8B 0D ?? ?? ?? ?? 8B 81 9C 01 00 00 6A 00 6A 00 50 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 74 24 20 84 C0 75 ?? 85 F6 74 ?? 32 DB",
+      patched = "C6 45 54 00 8B 0D ?? ?? ?? ?? 8B 81 9C 01 00 00 6A 00 6A 00 50 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 74 24 20 84 C0 75 ?? 85 F6 74 ?? B3 01",
+      original = "32 DB", bytes = "B3 01" },
+    { name = "S13 LoadAllDataMaps", offset = 43,
+      pattern = "C6 45 55 00 8B 0D ?? ?? ?? ?? 8B 81 9C 01 00 00 6A 00 6A 00 50 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 74 24 20 84 C0 75 ?? 85 F6 74 ?? 32 DB",
+      patched = "C6 45 55 00 8B 0D ?? ?? ?? ?? 8B 81 9C 01 00 00 6A 00 6A 00 50 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 74 24 20 84 C0 75 ?? 85 F6 74 ?? B3 01",
+      original = "32 DB", bytes = "B3 01" },
+    { name = "S14 ToolLevelPrefixBypass", offset = 27,
+      pattern = "53 8B D9 83 7B 74 FF 0F 85 A6 00 00 00 56 33 F6 57 8B 7C 24 10 89 73 74 39 77 08 75 09",
+      patched = "53 8B D9 83 7B 74 FF 0F 85 A6 00 00 00 56 33 F6 57 8B 7C 24 10 89 73 74 39 77 08 90 90",
+      original = "75 09", bytes = "90 90" },
+    { name = "S15 DataMapMergeDuplicates", offset = 9,
+      pattern = "80 7C 24 13 00 75 08 84 C0 0F 84 14 04 00 00",
+      patched = "80 7C 24 13 00 75 08 84 C0 90 90 90 90 90 90",
+      original = "0F 84 14 04 00 00", bytes = "90 90 90 90 90 90" },
 }
 
 -- S11 in AaBysT's original patch was misidentified as a lock bypass, but it actually
@@ -233,15 +253,41 @@ local function registerDataPatches()
         end
     end
 
-    if #datamapParts > 0 then
-        Crabe.Hooks.patchChunk("DataMap", table.concat(datamapParts, "\n"))
+    local nativeAllLoaded = sites["S12 LoadAllActorLists"] and sites["S13 LoadAllDataMaps"]
+    if not nativeAllLoaded then
+        if #datamapParts > 0 then
+            Crabe.Hooks.patchChunk("DataMap", table.concat(datamapParts, "\n"))
+        end
+        if #actorlistParts > 0 then
+            Crabe.Hooks.patchChunk("ActorList", table.concat(actorlistParts, "\n"))
+        end
+    else
+        -- GameplayDataMap::LoadPlayset only runs _loadforallplaysets_ and the active playset,
+        -- never DataMap.Playset["toybox"] where munitions_toybox.lua and surfaceimpacts.lua live.
+        local toyboxMunitionsPatch = [[
+if DataMap and DataMap.Playset then
+    local extraFiles = {
+        "GameDB|gamedb/core/munitions_toybox.lua|1|munitions",
+        "GameDB|gamedb/toybox/surfaceimpacts.lua|1|surfaceImpacts",
+    }
+    local function addExtra(tbl)
+        if not (tbl and tbl.Files) then return end
+        local seen = {}
+        for _, f in ipairs(tbl.Files) do seen[f] = true end
+        for _, f in ipairs(extraFiles) do
+            if not seen[f] then tbl.Files[#tbl.Files + 1] = f end
+        end
     end
-    if #actorlistParts > 0 then
-        Crabe.Hooks.patchChunk("ActorList", table.concat(actorlistParts, "\n"))
+    addExtra(DataMap.Playset._loadforallplaysets_)
+    for _, ps in pairs(DataMap.Playset) do addExtra(ps) end
+end
+]]
+        Crabe.Hooks.patchChunk("DataMap", toyboxMunitionsPatch)
+        log("Native engine loop active (S12-S15): registered lightweight ToyBox munitions patch")
     end
 
     dataPatchesRegistered = true
-    log(string.format("DataMap, ActorList, bitmasks and munitions patches registered for %d Play Sets", #PLAYSETS))
+    log(string.format("Bitmasks and data patches registered for %d Play Sets", #PLAYSETS))
 end
 
 -- Public API -----------------------------------------------------------------
@@ -281,8 +327,14 @@ function PlaysetBypass.setEnabled(on)
     return true
 end
 
+local s11VerifiedOnTick = false
+
 --- Re-applies the Lua layer; call once per tick. The native patches stay put.
 function PlaysetBypass.onTick()
+    if not s11VerifiedOnTick then
+        s11VerifiedOnTick = true
+        restoreS11()
+    end
     if enabled then applyLuaLayer() end
 end
 
