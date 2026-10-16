@@ -99,9 +99,22 @@ Modules are loaded with `Loader.load("modules.player")` and receive the loader a
 
 ---
 
+## The DIM2 Modding Ecosystem
+
+CrabeMenu is part of the **DIM2** open-source modding suite for Disney Infinity 3.0:
+
+| Project | Description | Link |
+| :--- | :--- | :---: |
+| **CrabeLoader** | Next-generation C++23 modloader, ASI bootstrap, and low-level engine hook framework. | [GitHub](https://github.com/LucasLhomme/CrabeLoader) |
+| **DisneyInfinityPortal** | Physical Disney Infinity Base (Portal) support & figure progress gateway. | [GitHub](https://github.com/LucasLhomme/DisneyInfinityPortal) |
+| **DisneyInfinityCreator** | Comprehensive character creation, model extraction, and modding toolkit. | [GitHub](https://github.com/LucasLhomme/DisneyInfinityCreator) |
+
+---
+
 ## Support & Sponsor
 
 If you enjoy CrabeMenu and want to support ongoing development:
 
 ☕ **[Buy Me a Coffee](https://buymeacoffee.com/crabecrabe)** (`buymeacoffee.com/crabecrabe`)
+
 
