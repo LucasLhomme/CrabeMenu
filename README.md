@@ -96,3 +96,12 @@ mods/crabemenu/
 
 A page is `{ title = "...", items = function() return { Items.action(...), Items.toggle(...), ... } end }`.
 Modules are loaded with `Loader.load("modules.player")` and receive the loader as `...`.
+
+---
+
+## Support & Sponsor
+
+If you enjoy CrabeMenu and want to support ongoing development:
+
+☕ **[Buy Me a Coffee](https://buymeacoffee.com/crabecrabe)** (`buymeacoffee.com/crabecrabe`)
+
