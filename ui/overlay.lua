@@ -4,6 +4,8 @@ local State = Loader.load("core.state")
 local Theme = Loader.load("ui.theme")
 local Cheats = Loader.load("modules.cheats")
 local SpeedHack = Loader.load("modules.speedhack")
+local Speedrun = Loader.load("modules.speedrun")
+local Stealth = Loader.load("modules.stealth")
 
 local Overlay = {}
 
@@ -39,9 +41,19 @@ local function healthText()
     return string.format("%.0f / %.0f", current, max), color
 end
 
+Overlay.ROWS = {
+    { key = "fps", label = "Frame rate" },
+    { key = "hero", label = "Hero name" },
+    { key = "health", label = "Health" },
+    { key = "memory", label = "Lua memory" },
+    { key = "timer", label = "Speedrun timer" },
+}
+
 local function badges()
     local list = {}
     if Cheats.isGodMode() then list[#list + 1] = { "GOD", "green" } end
+    if Cheats.isOneShotKill() then list[#list + 1] = { "1HIT", "red" } end
+    if Stealth.isEnabled() then list[#list + 1] = { "STLH", "violet" } end
 
     local speed = SpeedHack.getSpeed()
     if math.abs(speed - 1.0) > SPEED_TOLERANCE then list[#list + 1] = { string.format("x%.2f", speed), "gold" } end
@@ -88,13 +100,21 @@ function Overlay.render()
     end
 
     local health, healthColor = healthText()
-    local rows = {
-        { "Performance", string.format("%.0f FPS  (%.1f ms)", State.fps, State.frameTime * 1000), fpsColor() },
-        { "Hero", State.avatarName, "white" },
-        { "Health", health, healthColor },
-        { "Lua memory", string.format("%.2f MB", collectgarbage("count") / 1024), "muted" },
+    local candidates = {
+        { "fps", "Performance", string.format("%.0f FPS  (%.1f ms)", State.fps, State.frameTime * 1000), fpsColor() },
+        { "hero", "Hero", State.avatarName, "white" },
+        { "health", "Health", health, healthColor },
+        { "memory", "Lua memory", string.format("%.2f MB", collectgarbage("count") / 1024), "muted" },
     }
+    if Speedrun.hasTimerReading() then
+        candidates[#candidates + 1] = { "timer", "Timer", Speedrun.timerText(), Speedrun.isTimerRunning() and "gold" or "muted" }
+    end
+    local rows = {}
+    for _, candidate in ipairs(candidates) do
+        if not State.monitorHidden[candidate[1]] then rows[#rows + 1] = { candidate[2], candidate[3], candidate[4] } end
+    end
     local active = badges()
+    if State.monitorHidden.badges then active = {} end
     local bodyHeight = #rows * ROW_HEIGHT + 8 + (#active > 0 and BADGE_HEIGHT or 0)
 
     Theme.gradient(x, y, w, HEADER_HEIGHT, Theme.color("royal", 245), Theme.color("violet", 245), true)

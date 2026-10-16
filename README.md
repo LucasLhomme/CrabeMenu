@@ -32,20 +32,25 @@ While the menu is open the game does not see the navigation keys or the controll
 animation name) are typed on the keyboard; the search lists narrow as you type. Menu side, menu size and the overlay
 choice are saved to `crabemenu_settings.json`.
 
+Every key above is rebindable in **Settings > Keybinds** and stored in `crabemenu_keybinds.json` next to it, one list of
+key names per action (`"menuToggle": ["F5"]`, `"back": ["BACKSPACE", "ESCAPE"]`). Names are `F1`-`F12`, `A`-`Z`, `0`-`9`,
+`UP`, `ENTER`, `PAGEUP`, `NUMPAD0`... or a hex code like `0x75`; a name the file gets wrong falls back to the default.
+
 ## Pages
 
 | Page | What it does |
 |---|---|
-| **Player & Heroes** | Swap character (Star Wars, Marvel, Disney, custom heroes), **any character in any playset**, level up, max level, refill health, Sparks |
+| **Player & Heroes** | Swap character (Star Wars, Marvel, Disney, custom heroes), **any character in any playset**, level up, **level down**, max level, refund skill points (free respec), raise the skill point total a level 20 hero earns (75, 100, 150 or 200; next launch), refill health, add or remove Sparks |
 | **Spawners** | Scan the world inventory, spawn NPCs and objects (searchable), a **Modded** list of the entries a mod reskins (tagged `[Mod name]`), equip weapons from the loader catalog, clear placed objects |
 | **Animations** | The 7,784 choreographies of `Game.ListChoreographies()` by category, searchable, or play one by name |
-| **Cheats** | God Mode (x86 code caves), game speed (needs `Crabe.GameSpeed`), Toy Box editor unlock |
-| **World** | Go to the main menu (world select, the pause menu's Quit without its popup), return to the hub, travel to any of the 187 base-game worlds of the game's zone list (searchable, grouped by playset; a world the game refuses is forced on a second press; the 1.05/1.06 and unreleased worlds are left to Disney Infinity Complete); free camera and teleport when `modules/freecam.lua` is present |
+| **Cheats** | God Mode and **One shot kill** (x86 code caves), **No fall** (hits never knock the hero down; pair it with God Mode), **Stealth** (enemies stop targeting you), game speed (needs `Crabe.GameSpeed`), **Hero speed** (only your hero runs faster; needs `Game.SetActorSpeedScale`), Toy Box editor unlock |
+| **World** | Go to the main menu (world select, the pause menu's Quit without its popup), return to the hub, travel to any of the 187 base-game worlds of the game's zone list, listed by their in-game English names (searchable by name or zone id, grouped by playset; a world the game refuses is forced on a second press; the 1.05/1.06 and unreleased worlds are left to Disney Infinity Complete); free camera and teleport hero to camera; a Play Set zone loads through the pause menu's load path, so the Play Set save is kept |
+| **Speedrun** | Stopwatch with splits (also in the F6 overlay), three saved positions to teleport back to, reload the current world, and a separate **Speedrun HUD** panel (stopwatch, world, splits, position, hero speed; choose its corner and which lines it shows in Settings, down to the stopwatch alone). Default hotkeys: `F7` save position, `F8` teleport, `F9` start / pause, `F3` reload the world, `F11` HUD |
 | **Mods** | The menus other mods declare through `Crabe.Menu` (Disney Infinity Complete warps, Radahn spawns, ...) |
-| **Settings** | Menu side and size, overlay, video options, credits |
+| **Settings** | Menu side and size, **Keybinds** (every menu and speedrun key), runtime monitor lines, Speedrun HUD, video options, credits |
 
-Multiplayer and the free camera are kept out of the repository (`.gitignore`); the menu shows their pages only
-when their files are there. The animation list comes from CrabeLoader's catalog, so nothing scans the game folder
+Multiplayer is kept out of the repository (`.gitignore`); the menu shows its page only when its files are there.
+The animation list comes from CrabeLoader's catalog, so nothing scans the game folder
 at run time (the old `io.popen` scan froze the game for seconds).
 
 **Any character in any playset** is AaBysT's *Anyone Can Cook II* patch integrated natively:
@@ -85,7 +90,7 @@ mods/crabemenu/
 │   └── util.lua          search filter, name formatting, IPv4 check
 ├── modules/              behavior, no drawing
 │   ├── player.lua  spawner.lua  weapons.lua  animations.lua  cheats.lua
-│   └── speedhack.lua  world.lua  (freecam.lua, multiplayer.lua: optional, not in the repository)
+│   └── speedhack.lua  world.lua  freecam.lua  speedrun.lua  nofall.lua  stealth.lua  state_guard.lua  avatar.lua  (multiplayer.lua: optional, not in the repository)
 └── ui/                   drawing, no game logic
     ├── theme.lua         palette and the scaled drawing helpers (ImGui.Draw*)
     ├── items.lua         row kinds: action, toggle, submenu, choice, input, info, section

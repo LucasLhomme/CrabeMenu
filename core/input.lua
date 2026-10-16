@@ -1,6 +1,7 @@
 local Loader = ...
 local Config = Loader.load("core.config")
 local State = Loader.load("core.state")
+local Keybinds = Loader.load("core.keybinds")
 
 local Input = {}
 
@@ -14,16 +15,16 @@ local PAD = (Crabe.Input and Crabe.Input.PAD) or {
 }
 
 local NAVIGATION = {
-    up = { keys = { VK.UP }, pad = { PAD.DPAD_UP }, stick = "up", repeats = true },
-    down = { keys = { VK.DOWN }, pad = { PAD.DPAD_DOWN }, stick = "down", repeats = true },
-    left = { keys = { VK.LEFT }, pad = { PAD.DPAD_LEFT }, stick = "left", repeats = true },
-    right = { keys = { VK.RIGHT }, pad = { PAD.DPAD_RIGHT }, stick = "right", repeats = true },
-    select = { keys = { VK.ENTER }, pad = { PAD.A } },
-    back = { keys = { VK.BACKSPACE, VK.ESCAPE }, pad = { PAD.B } },
-    pageUp = { keys = { VK.PAGE_UP }, trigger = "left", repeats = true },
-    pageDown = { keys = { VK.PAGE_DOWN }, trigger = "right", repeats = true },
-    first = { keys = { VK.HOME } },
-    last = { keys = { VK.END } },
+    up = { action = "up", pad = { PAD.DPAD_UP }, stick = "up", repeats = true },
+    down = { action = "down", pad = { PAD.DPAD_DOWN }, stick = "down", repeats = true },
+    left = { action = "left", pad = { PAD.DPAD_LEFT }, stick = "left", repeats = true },
+    right = { action = "right", pad = { PAD.DPAD_RIGHT }, stick = "right", repeats = true },
+    select = { action = "select", pad = { PAD.A } },
+    back = { action = "back", pad = { PAD.B } },
+    pageUp = { action = "pageUp", trigger = "left", repeats = true },
+    pageDown = { action = "pageDown", trigger = "right", repeats = true },
+    first = { action = "first" },
+    last = { action = "last" },
 }
 
 local TYPING = {
@@ -37,6 +38,13 @@ local edges = {}
 
 local function isKeyDown(code)
     return Crabe._keyDown(code) == 1
+end
+
+local function anyKeyDown(codes)
+    for _, code in ipairs(codes) do
+        if isKeyDown(code) then return true end
+    end
+    return false
 end
 
 local function readPad()
@@ -64,7 +72,7 @@ local function triggerHeld(pad, side)
 end
 
 local function heldBy(binding, pad)
-    for _, code in ipairs(binding.keys or {}) do
+    for _, code in ipairs(binding.action and Keybinds.codes(binding.action) or binding.keys or {}) do
         if isKeyDown(code) then return "keyboard" end
     end
     for _, mask in ipairs(binding.pad or {}) do
@@ -135,15 +143,20 @@ end
 function Input.menuToggled()
     local pad = readPad()
     local combo = padButton(pad, PAD.RB) and padButton(pad, PAD.DPAD_LEFT)
-    local keyboard = rising("menu", isKeyDown(Config.KEYS.MENU_TOGGLE))
+    local keyboard = rising("menu", anyKeyDown(Keybinds.codes("menuToggle")))
     local controller = rising("menuPad", combo)
     if controller then State.lastDevice = "pad" end
     return keyboard or controller
 end
 
+--- Reports whether a key bound to the action went down this tick.
+function Input.actionPressed(action)
+    return rising("action" .. action, anyKeyDown(Keybinds.codes(action)))
+end
+
 --- Reports whether F6 was just pressed.
 function Input.overlayToggled()
-    return rising("overlay", isKeyDown(Config.KEYS.OVERLAY_TOGGLE))
+    return rising("overlay", anyKeyDown(Keybinds.codes("overlayToggle")))
 end
 
 local function characterFor(code, shift)

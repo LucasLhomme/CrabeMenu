@@ -4,6 +4,7 @@ local Items = Loader.load("ui.items")
 local PlayerModule = Loader.load("modules.player")
 local Cheats = Loader.load("modules.cheats")
 local PlaysetBypass = Loader.load("modules.playset_bypass")
+local SkillPoints = Loader.load("modules.skill_points")
 local Settings = Loader.load("core.settings")
 
 local ROUTES = { "loadout", "legacy" }
@@ -52,6 +53,18 @@ local function sparks(amount, label)
     return Items.action(label, function() PlayerModule.addSparks(amount) end, "Adds " .. label:sub(2) .. " to your balance")
 end
 
+local SKILL_TOTAL_LABELS = {}
+for index, total in ipairs(SkillPoints.TOTALS) do SKILL_TOTAL_LABELS[index] = tostring(total) end
+
+local function setSkillTotal(index)
+    SkillPoints.setIndex(index)
+    Settings.save()
+end
+
+local function takeSparks(amount, label)
+    return Items.action(label, function() PlayerModule.removeSparks(amount) end, "Takes " .. label:sub(2) .. " off your balance")
+end
+
 local ITEMS = {
     Items.info("Current hero", function() return State.avatarName end,
         function() return "SKU " .. tostring(State.avatarSku) end),
@@ -64,12 +77,22 @@ local ITEMS = {
         "Lifts playset barriers while preserving categories; off restores the original game"),
     Items.section("Progression"),
     Items.action("Level up +1", PlayerModule.levelUp, "Raises the current hero by one level"),
+    Items.action("Level down -1", PlayerModule.levelDown,
+        "Lowers the hero by one level; experience is kept, and skills that no longer fit are refunded"),
     Items.action("Max level", PlayerModule.maxProgression, "Sets the current hero to level 20"),
+    Items.choice("Skill points at level 20", SKILL_TOTAL_LABELS, SkillPoints.getIndex, setSkillTotal,
+        "Total a level 20 hero earns, for every hero; takes effect the next time the game starts"),
+    Items.action("Refund skill points", PlayerModule.refundSkillPoints,
+        "Free respec: takes back every bought skill so you can spend the points again (twice per figure)"),
     Items.action("Refill health", Cheats.refillHealth, "Fills your health bar back up"),
     Items.section("Sparks"),
     sparks(50000, "+50,000 Sparks"),
     sparks(1000000, "+1,000,000 Sparks"),
     sparks(10000000, "+10,000,000 Sparks"),
+    takeSparks(1000, "-1,000 Sparks"),
+    takeSparks(50000, "-50,000 Sparks"),
+    takeSparks(1000000, "-1,000,000 Sparks"),
+    Items.action("Remove all Sparks", function() PlayerModule.removeSparks(nil) end, "Sets your balance back to zero"),
 }
 
 return {

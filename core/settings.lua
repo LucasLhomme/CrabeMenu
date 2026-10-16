@@ -21,6 +21,13 @@ function Settings.load()
     if saved.overlay == true then State.isOverlayOpen = true end
     if type(saved.playsetBypass) == "boolean" then State.playsetBypass = saved.playsetBypass end
     if type(saved.lockControls) == "boolean" then State.lockControls = saved.lockControls end
+    if tonumber(saved.skillPointTotal) then State.skillPointTotal = tonumber(saved.skillPointTotal) end
+    if saved.speedrunHud == true then State.isSpeedrunHudOpen = true end
+    if tonumber(saved.hudCorner) and tonumber(saved.hudCorner) >= 1 and tonumber(saved.hudCorner) <= 4 then
+        State.hudCorner = tonumber(saved.hudCorner)
+    end
+    if type(saved.hudHidden) == "table" then State.hudHidden = saved.hudHidden end
+    if type(saved.monitorHidden) == "table" then State.monitorHidden = saved.monitorHidden end
 end
 
 --- Writes the current menu side, size, overlay and playset bypass choices to disk.
@@ -34,6 +41,11 @@ function Settings.save()
         overlay = State.isOverlayOpen,
         playsetBypass = State.playsetBypass,
         lockControls = State.lockControls,
+        skillPointTotal = State.skillPointTotal,
+        speedrunHud = State.isSpeedrunHudOpen,
+        hudCorner = State.hudCorner,
+        hudHidden = State.hudHidden,
+        monitorHidden = State.monitorHidden,
     })
 end
 

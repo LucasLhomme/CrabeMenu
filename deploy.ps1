@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 $gameDir = "D:\SteamLibrary\steamapps\common\Disney Infinity 3.0 Gold Edition"
 $modsTarget = Join-Path $gameDir "mods"
 $menuTarget = Join-Path $modsTarget "crabemenu"
-$menuItems = @("mod.json", "main.lua", "core", "ui", "modules")
+$menuItems = @("mod.json", "main.lua", "core", "ui", "modules", "skilltrees")
 
 function Remove-Bom([string]$root) {
     Get-ChildItem -Path $root -Recurse -Filter *.lua | ForEach-Object {

@@ -2,6 +2,7 @@ local Loader = ...
 local Items = Loader.load("ui.items")
 local Menu = Loader.load("ui.menu")
 local WorldModule = Loader.load("modules.world")
+local FreeCam = Loader.load("modules.freecam")
 local List = Loader.load("ui.pages.list")
 local CATALOG = Loader.load("modules.world_catalog")
 local SKIES = Loader.load("modules.sky_catalog")
@@ -15,13 +16,13 @@ local function leave(run)
 end
 
 local function worldItem(row)
-    return Items.action(row.name, leave(function() return WorldModule.travelTo(row.name) end),
-        "Loads " .. row.name .. "; a world the game refuses needs a second press", row.group)
+    return Items.action(row.title, leave(function() return WorldModule.travelTo(row.name) end),
+        "Loads " .. row.title .. " (" .. row.name .. "); a world the game refuses needs a second press", row.group)
 end
 
 local function worldPage(title, rows)
     return List.page(title, function() return rows end, {
-        fields = { "name", "group" },
+        fields = { "title", "name", "group" },
         toItem = worldItem,
         emptyLabel = "No world here",
     })
@@ -31,8 +32,8 @@ local allRows = {}
 local travelItems = {}
 for _, group in ipairs(CATALOG) do
     local rows = {}
-    for _, name in ipairs(group.worlds) do
-        local row = { name = name, group = group.title }
+    for _, world in ipairs(group.worlds) do
+        local row = { name = world.id, title = world.name, group = group.title }
         rows[#rows + 1] = row
         allRows[#allRows + 1] = row
     end
@@ -40,7 +41,7 @@ for _, group in ipairs(CATALOG) do
         "Every " .. group.title .. " world", tostring(#rows))
 end
 table.insert(travelItems, 1, Items.submenu("Search every world", worldPage("All worlds", allRows),
-    "Type part of a name, e.g. hoth or hub", tostring(#allRows)))
+    "Type part of a name or a zone id, e.g. hoth, jakku or EMP_", tostring(#allRows)))
 
 local travelPage = {
     title = "Travel to a world",
@@ -90,18 +91,15 @@ local ITEMS = {
         tostring(#allSkies)),
 }
 
--- The free camera ships outside the repository; its rows exist only with it.
-if Loader.exists("modules.freecam") then
-    local FreeCam = Loader.load("modules.freecam")
-    local function setFreeCam(on)
-        if on ~= FreeCam.isActive() then FreeCam.toggle() end
-    end
-    ITEMS[#ITEMS + 1] = Items.section("Camera")
-    ITEMS[#ITEMS + 1] = Items.toggle("Free camera", FreeCam.isActive, setFreeCam,
-        "Fly the camera anywhere; close the menu to steer it")
-    ITEMS[#ITEMS + 1] = Items.action("Teleport hero to camera", FreeCam.teleportPlayerToCamera,
-        "Drops your hero where the free camera is")
+local function setFreeCam(on)
+    if on ~= FreeCam.isActive() then FreeCam.toggle() end
 end
+
+ITEMS[#ITEMS + 1] = Items.section("Camera")
+ITEMS[#ITEMS + 1] = Items.toggle("Free camera", FreeCam.isActive, setFreeCam,
+    "Fly the camera anywhere; close the menu to steer it")
+ITEMS[#ITEMS + 1] = Items.action("Teleport hero to camera", FreeCam.teleportPlayerToCamera,
+    "Drops your hero where the free camera is")
 
 return {
     title = "World",

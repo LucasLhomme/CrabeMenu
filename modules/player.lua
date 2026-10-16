@@ -5,6 +5,7 @@ local Native = Loader.load("core.native")
 local PlayerModule = {}
 
 local MAX_LEVEL = 20
+local MIN_LEVEL = 1
 local ROSTER_LIFETIME = 2
 local LIVE_INFO_INTERVAL = 30
 
@@ -61,10 +62,44 @@ function PlayerModule.levelUp()
     return true
 end
 
---- Sets the avatar progression to the maximum level.
+--- Lowers the avatar level by one. Experience is kept, so the next experience gained may raise it again.
+--- When the skills bought no longer fit the lower level they are refunded, which uses one of the
+--- figure's two free respecs.
+function PlayerModule.levelDown()
+    local level = tonumber(Native.poll(Game.GetAvatarLevel))
+    if not level then return Native.fail("Level down: the avatar level cannot be read here") end
+    if level <= MIN_LEVEL then
+        State.setStatus("Already at level " .. MIN_LEVEL, "warning")
+        return false
+    end
+
+    local target = level - 1
+    local ok, reported = Native.run("Game.SetAvatarLevel", Game.SetAvatarLevel, target)
+    if not ok then return false end
+    if tonumber(reported) ~= target then
+        return Native.fail("Level down: the game reports level " .. tostring(reported) .. " instead of " .. target)
+    end
+
+    local refunded = false
+    if (tonumber(Native.poll(Game.GetSkillPoints)) or 0) < 0 then
+        if not Native.run("Game.RespecAvatar", Game.RespecAvatar) then return false end
+        refunded = true
+    end
+
+    State.setStatus(string.format("Level down: %d -> %d (skill points: %s)%s", level, target,
+        tostring(Native.poll(Game.GetSkillPoints) or "?"), refunded and ", skills refunded" or ""), "success")
+    return true
+end
+
+--- Sets the hero to the maximum level and reports the level and skill points the game shows afterwards.
 function PlayerModule.maxProgression()
-    if not Native.run("Game.SetAvatarProgression", Game.SetAvatarProgression, MAX_LEVEL) then return false end
-    State.setStatus("Progression set to level " .. MAX_LEVEL, "success")
+    local ok, reported = Native.run("Game.SetAvatarLevel", Game.SetAvatarLevel, MAX_LEVEL)
+    if not ok then return false end
+    if tonumber(reported) ~= MAX_LEVEL then
+        return Native.fail("Max level: the game reports level " .. tostring(reported))
+    end
+    State.setStatus(string.format("Level %d (skill points: %s)", MAX_LEVEL,
+        tostring(Native.poll(Game.GetSkillPoints) or "?")), "success")
     return true
 end
 
@@ -74,6 +109,37 @@ function PlayerModule.addSparks(amount)
 
     local balance = Native.poll(Game.GetSparks)
     State.setStatus(string.format("+%d Sparks (balance: %s)", amount, tostring(balance or "unknown")), "success")
+    return true
+end
+
+--- Refunds every skill the hero bought, free, so the points can be spent again.
+--- The game allows two such refunds per figure; the points shown afterwards come from the game.
+function PlayerModule.refundSkillPoints()
+    local before = tonumber(Native.poll(Game.GetSkillPoints))
+    if not Native.run("Game.RespecAvatar", Game.RespecAvatar) then return false end
+
+    local after = tonumber(Native.poll(Game.GetSkillPoints))
+    State.setStatus(string.format("Skill points refunded: %s -> %s", tostring(before or "?"), tostring(after or "?")), "success")
+    return true
+end
+
+--- Removes Sparks from the host player's balance, never below zero; amount nil removes them all.
+--- Reports the balance the game shows afterwards, not the one asked for.
+function PlayerModule.removeSparks(amount)
+    local before = tonumber(Native.poll(Game.GetSparks))
+    if not before then return Native.fail("Sparks: the balance cannot be read here") end
+
+    local removed = math.floor(math.min(amount or before, before))
+    if removed <= 0 then
+        State.setStatus("You have no Sparks to remove", "warning")
+        return false
+    end
+
+    if not Native.run("Game.RemoveFromInventory", Game.RemoveFromInventory, "Items.money", removed) then return false end
+
+    local after = tonumber(Native.poll(Game.GetSparks))
+    if after == before then return Native.fail("Sparks: the balance did not change (still " .. before .. ")") end
+    State.setStatus(string.format("-%d Sparks (balance: %s)", removed, tostring(after or "unknown")), "success")
     return true
 end
 
