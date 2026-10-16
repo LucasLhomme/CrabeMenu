@@ -2,6 +2,7 @@ local Loader = ...
 local Config = Loader.load("core.config")
 local State = Loader.load("core.state")
 local Input = Loader.load("core.input")
+local Keybinds = Loader.load("core.keybinds")
 local Theme = Loader.load("ui.theme")
 local Items = Loader.load("ui.items")
 
@@ -26,6 +27,7 @@ local GLOW_OFFSETS = { { -2, 0 }, { 2, 0 }, { 0, -2 }, { 0, 2 } }
 local KEYBOARD_LEGEND = "\226\134\145\226\134\147 Move    \226\134\144\226\134\146 Change    Enter Select    Esc Back"
 local PAD_LEGEND = "D-pad Move    A Select    B Back    LT/RT Page    RB+\226\134\144 Close"
 local PROMPT_LEGEND = "Enter Confirm    Esc Cancel    Backspace Erase"
+local CAPTURE_LEGEND = "Press the new key    Esc Cancel"
 
 local root = nil
 local stack = {}
@@ -190,6 +192,10 @@ end
 
 --- Reads the controls for this tick and moves the menu; call once per tick.
 function Menu.update(dt)
+    if Keybinds.isCapturing() then
+        Keybinds.updateCapture()
+        return
+    end
     if Input.menuToggled() then Menu.setOpen(not State.isMenuOpen) end
     if not State.isMenuOpen or not root then return end
 
@@ -361,6 +367,7 @@ local function drawFooter(x, y, w)
 end
 
 local function legend()
+    if Keybinds.isCapturing() then return CAPTURE_LEGEND end
     if prompt then return PROMPT_LEGEND end
     return (State.lastDevice == "pad") and PAD_LEGEND or KEYBOARD_LEGEND
 end

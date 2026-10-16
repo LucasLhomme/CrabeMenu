@@ -4,6 +4,10 @@ local Config = Loader.load("core.config")
 local State = {
     isMenuOpen = false,
     isOverlayOpen = false,
+    isSpeedrunHudOpen = false,
+    hudCorner = 4,
+    hudHidden = {},
+    monitorHidden = {},
     isTyping = false,
 
     statusMessage = "",
@@ -39,17 +43,19 @@ local function applyCapture()
         if Crabe.Input.captureDirectInput then Crabe.Input.captureDirectInput(false) end
         if State._controlsLockedByMenu and Crabe.Input.clearRemap then
             State._controlsLockedByMenu = false
-            Crabe.Input.clearRemap()
+            Crabe.Input.clearRemap(Crabe.Input.DEVICE.MOUSE)
         end
         return
     end
 
     local keys = {}
+    local reserved = {}
+    for _, code in ipairs(State.reservedKeys()) do reserved[code] = true end
     if State.lockControls then
         if Crabe.Input.captureDirectInput then Crabe.Input.captureDirectInput(true) end
         if Crabe.Input.capturePad then Crabe.Input.capturePad(true) end
         for code = 1, 255 do
-            if code ~= Config.VK.F5 and code ~= Config.VK.F6 and code ~= 0x2D and code ~= 0x73 then
+            if not reserved[code] then
                 keys[#keys + 1] = code
             end
         end
@@ -62,19 +68,31 @@ local function applyCapture()
     else
         if Crabe.Input.captureDirectInput then Crabe.Input.captureDirectInput(false) end
         if Crabe.Input.capturePad then Crabe.Input.capturePad(false) end
-        for _, code in ipairs(Config.NAV_KEYS) do keys[#keys + 1] = code end
+        for _, code in ipairs(State.navigationKeys()) do keys[#keys + 1] = code end
         if State.isTyping then
             for _, code in ipairs(typingKeys) do keys[#keys + 1] = code end
         end
         if State._controlsLockedByMenu and Crabe.Input.clearRemap then
             State._controlsLockedByMenu = false
-            Crabe.Input.clearRemap()
+            Crabe.Input.clearRemap(Crabe.Input.DEVICE.MOUSE)
         end
     end
     Crabe.Input.captureKeys(keys)
 end
 
 State.applyCapture = applyCapture
+
+--- Gives the game back every key, button and mouse click this menu may have taken, whatever state it was left in.
+function State.releaseInput()
+    Crabe.Input.captureKeys(nil)
+    if Crabe.Input.capturePad then Crabe.Input.capturePad(false) end
+    if Crabe.Input.captureDirectInput then Crabe.Input.captureDirectInput(false) end
+    if Crabe.Input.clearRemap and Crabe.Input.DEVICE then Crabe.Input.clearRemap(Crabe.Input.DEVICE.MOUSE) end
+    State._controlsLockedByMenu = false
+end
+
+State.reservedKeys = function() return { Config.VK.F5, Config.VK.F6, 0x2D, 0x73 } end
+State.navigationKeys = function() return {} end
 
 --- Sets the footer message; type is "info", "success", "warning" or "error".
 function State.setStatus(message, messageType)

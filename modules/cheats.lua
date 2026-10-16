@@ -11,10 +11,11 @@ local MAGIC = 0x474F4431
 local RING_SIZE = 64
 local OFFSET = {
     magic = 0x00, enabled = 0x04, player = 0x08, lastDamaged = 0x0C,
-    ringIndex = 0x10, flags = 0x14, ring = 0x20,
+    ringIndex = 0x10, flags = 0x14, oneShot = 0x18, ring = 0x20,
 }
 local BLOCK_SIZE = OFFSET.ring + RING_SIZE * 4
 local FLAG_HUD_CAVE = 1
+local FLAG_ONE_SHOT_CAVE = 2
 
 local HEALTH_CURRENT = 0x08
 local HEALTH_MAX = 0x0C
@@ -52,20 +53,45 @@ local function openBlock()
     return block
 end
 
+local function hasFlag(flag)
+    if not godBlock then return false end
+    local flags = Memory.readU32(godBlock + OFFSET.flags) or 0
+    return math.floor(flags / flag) % 2 == 1
+end
+
 local function hasAutoDetection()
-    return godBlock ~= nil and Memory.readU32(godBlock + OFFSET.flags) == FLAG_HUD_CAVE
+    return hasFlag(FLAG_HUD_CAVE)
+end
+
+local function hexLength(bytes)
+    local count = 0
+    for _ in bytes:gmatch("%x%x") do count = count + 1 end
+    return count
+end
+
+local function skip(opcode, over)
+    return string.format("%s %02X", opcode, hexLength(over))
+end
+
+local function guarded(test, jump, body)
+    return test .. " " .. skip(jump, body) .. " " .. body
 end
 
 local function damageCaveBody(block)
+    local function field(name) return littleEndian(block + OFFSET[name]) end
+
+    local record = "89 35 " .. field("lastDamaged")
+    local hold = "F3 0F 10 46 0C"
+    local god = guarded("3B 35 " .. field("player"), "75", hold)
+    local kill = "0F 57 C0"
+    local notHero = guarded("3B 35 " .. field("player"), "74", kill)
+    local damaging = guarded("F6 45 0B 80", "74", notHero)
+    local heroKnown = guarded("83 3D " .. field("player") .. " 00", "74", damaging)
+
     return table.concat({
-        "F6 45 0B 80",
-        "74 06",
-        "89 35 " .. littleEndian(block + OFFSET.lastDamaged),
-        "80 3D " .. littleEndian(block + OFFSET.enabled) .. " 00",
-        "74 0D",
-        "3B 35 " .. littleEndian(block + OFFSET.player),
-        "75 05",
-        "F3 0F 10 46 0C",
+        guarded("F6 45 0B 80", "74", record),
+        guarded("80 3D " .. field("enabled") .. " 00", "74", god),
+        guarded("80 3D " .. field("oneShot") .. " 00", "74", heroKnown),
     }, " ")
 end
 
@@ -100,7 +126,7 @@ local function installGodCaves()
     end
 
     local hudInstalled = installHudCave(block)
-    Memory.writeU32(block + OFFSET.flags, hudInstalled and FLAG_HUD_CAVE or 0)
+    Memory.writeU32(block + OFFSET.flags, (hudInstalled and FLAG_HUD_CAVE or 0) + FLAG_ONE_SHOT_CAVE)
     Memory.writeU32(block + OFFSET.magic, MAGIC)
     godBlock = block
     return true
@@ -154,6 +180,32 @@ function Cheats.setGodMode(enabled)
     if enabled then refillPlayer() end
     local hint = hasAutoDetection() and "" or " - no auto-detection, use Lock To Damaged Target"
     State.setStatus((enabled and "God Mode ON" or "God Mode OFF") .. hint, enabled and not hasAutoDetection() and "warning" or "success")
+    return true
+end
+
+--- Reports whether every hit currently kills what it touches, the hero excepted.
+function Cheats.isOneShotKill()
+    return godBlock ~= nil and Memory.readU32(godBlock + OFFSET.oneShot) == 1
+end
+
+--- Turns one shot kill on or off: any entity but the hero drops to zero health on its first damage.
+--- Needs the hero to be identified; the flag is refused when the damage cave in memory predates it.
+function Cheats.setOneShotKill(enabled)
+    if not installGodCaves() then return false end
+    if not hasFlag(FLAG_ONE_SHOT_CAVE) then
+        return Native.fail("One shot kill: the damage code in memory is from an older build, restart the game")
+    end
+
+    Memory.writeU32(godBlock + OFFSET.oneShot, enabled and 1 or 0)
+    if Cheats.isOneShotKill() ~= enabled then return Native.fail("One shot kill: the flag did not stick in memory") end
+
+    local heroKnown = (Memory.readU32(godBlock + OFFSET.player) or 0) ~= 0
+    if enabled and not heroKnown then
+        State.setStatus("One shot kill ON, waiting for the hero to be identified: take a hit or use Lock To Damaged Target",
+            "warning")
+        return true
+    end
+    State.setStatus(enabled and "One shot kill ON" or "One shot kill OFF", "success")
     return true
 end
 

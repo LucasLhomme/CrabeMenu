@@ -1,9 +1,10 @@
 local Config = {}
 
-Config.VERSION = "1.0.0"
+Config.VERSION = "1.1.0"
 Config.NAME = "CrabeMenu"
 Config.AUTHOR = "Lucas Lhomme"
 Config.SETTINGS_FILE = "crabemenu_settings.json"
+Config.KEYBINDS_FILE = "crabemenu_keybinds.json"
 Config.BANNER_IMAGE = "mods/crabemenu/ui/CrabeMenu.png"
 
 local VK = {
@@ -14,16 +15,6 @@ local VK = {
     OEM_COMMA = 0xBC, OEM_MINUS = 0xBD, OEM_PERIOD = 0xBE,
 }
 Config.VK = VK
-
-Config.KEYS = {
-    MENU_TOGGLE = VK.F5,
-    OVERLAY_TOGGLE = VK.F6,
-}
-
-Config.NAV_KEYS = {
-    VK.UP, VK.DOWN, VK.LEFT, VK.RIGHT, VK.ENTER, VK.BACKSPACE, VK.ESCAPE,
-    VK.PAGE_UP, VK.PAGE_DOWN, VK.HOME, VK.END, VK.TAB,
-}
 
 Config.REPEAT = {
     DELAY = 0.38,

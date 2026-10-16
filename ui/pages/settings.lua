@@ -2,8 +2,11 @@ local Loader = ...
 local Config = Loader.load("core.config")
 local State = Loader.load("core.state")
 local Settings = Loader.load("core.settings")
+local Keybinds = Loader.load("core.keybinds")
 local Items = Loader.load("ui.items")
 local WorldModule = Loader.load("modules.world")
+local Overlay = Loader.load("ui.overlay")
+local SpeedrunHud = Loader.load("ui.speedrun_hud")
 
 local SIDES = { "left", "right" }
 local SIDE_LABELS = { "Left", "Right" }
@@ -101,16 +104,104 @@ local function videoToggle(option)
     end, "Turns " .. option.label .. " on or off and saves the game settings")
 end
 
+local function bindItem(action)
+    return Items.action(action.label, function() Keybinds.beginCapture(action.id) end,
+        "Press Enter, then the new key (Esc cancels); " .. Config.KEYBINDS_FILE .. " holds the same list",
+        function() return Keybinds.label(action.id) end)
+end
+
+local function controlItems()
+    local list = {}
+    local group = nil
+    for _, action in ipairs(Keybinds.ACTIONS) do
+        if action.group ~= group then
+            group = action.group
+            list[#list + 1] = Items.section(group)
+        end
+        list[#list + 1] = bindItem(action)
+    end
+    list[#list + 1] = Items.section("Reset")
+    list[#list + 1] = Items.action("Restore default keys", Keybinds.resetAll, "Puts every key above back to its default")
+    return list
+end
+
+local controlsPage = {
+    title = "Keybinds",
+    items = (function()
+        local list = controlItems()
+        return function() return list end
+    end)(),
+}
+
+local function monitorRowToggle(row)
+    return Items.toggle(row.label, function() return not State.monitorHidden[row.key] end, function(on)
+        State.monitorHidden[row.key] = (not on) or nil
+        Settings.save()
+    end, "Shows or hides this line of the runtime monitor")
+end
+
+local function monitorItems()
+    local list = {}
+    for _, row in ipairs(Overlay.ROWS) do list[#list + 1] = monitorRowToggle(row) end
+    list[#list + 1] = Items.toggle("Cheat badges", function() return not State.monitorHidden.badges end, function(on)
+        State.monitorHidden.badges = (not on) or nil
+        Settings.save()
+    end, "Shows or hides the GOD / 1HIT / CAM badges under the monitor")
+    return list
+end
+
+local monitorPage = {
+    title = "Runtime monitor",
+    items = (function()
+        local list = monitorItems()
+        return function() return list end
+    end)(),
+}
+
+local function hudLinesPage_items()
+    local list = {}
+    for _, row in ipairs(SpeedrunHud.ROWS) do
+        list[#list + 1] = Items.toggle(row.label, function() return not State.hudHidden[row.key] end, function(on)
+            State.hudHidden[row.key] = (not on) or nil
+            Settings.save()
+        end, "Shows or hides this line of the speedrun panel")
+    end
+    return list
+end
+
+local hudLinesPage = {
+    title = "Speedrun HUD lines",
+    items = (function()
+        local list = hudLinesPage_items()
+        return function() return list end
+    end)(),
+}
+
+local function setHud(on)
+    State.isSpeedrunHudOpen = (on == true)
+    Settings.save()
+end
+
 local ITEMS = {
     Items.section("Menu"),
+    Items.submenu("Keybinds", controlsPage, "Rebind the menu and speedrun keys; saved in " .. Config.KEYBINDS_FILE),
     Items.choice("Menu side", SIDE_LABELS, function() return (State.menuSide == "right") and 2 or 1 end, setSide,
         "Which side of the screen the menu sits on"),
     Items.choice("Menu size", SCALE_LABELS, function() return State.scaleIndex end, setScale,
         "Makes the whole menu smaller or bigger"),
     Items.toggle("Lock in-game controls", function() return State.lockControls end, setLockControls,
         "Locks in-game movement and actions while the menu is open"),
-    Items.toggle("Runtime overlay (F6)", function() return State.isOverlayOpen end, setOverlay,
+    Items.toggle("Runtime overlay", function() return State.isOverlayOpen end, setOverlay,
         "Shows FPS, hero, health and active cheats in a corner"),
+    Items.submenu("Runtime monitor lines", monitorPage, "Pick which lines the runtime overlay shows"),
+    Items.section("Speedrun HUD"),
+    Items.toggle("Speedrun HUD", function() return State.isSpeedrunHudOpen end, setHud,
+        "A separate panel with the stopwatch, splits, world and position; its hotkey is in Keybinds"),
+    Items.choice("HUD corner", SpeedrunHud.CORNERS, function() return State.hudCorner end, function(index)
+        State.hudCorner = index
+        Settings.save()
+    end, "Which corner of the screen the speedrun panel sits in"),
+    Items.submenu("HUD lines", hudLinesPage, "Pick the lines under the stopwatch; turn them all off to keep only the timer"),
     Items.section("Video"),
     Items.choice("Resolution", RES_LABELS, getResIndex, setResIndex,
         "Takes effect the next time the game starts (4K UHD, ultrawide, Steam Deck)"),
@@ -121,7 +212,8 @@ for _, option in ipairs(WorldModule.VIDEO_OPTIONS) do ITEMS[#ITEMS + 1] = videoT
 
 ITEMS[#ITEMS + 1] = Items.section("About")
 ITEMS[#ITEMS + 1] = Items.info(Config.NAME, "v" .. Config.VERSION, "Made by " .. Config.AUTHOR)
-ITEMS[#ITEMS + 1] = Items.info("Keyboard", "F5 menu  \194\183  F6 overlay", "Insert opens the CrabeLoader console")
+ITEMS[#ITEMS + 1] = Items.info("Keyboard", function() return Keybinds.label("menuToggle") .. " menu  \194\183  " .. Keybinds.label("overlayToggle") .. " overlay" end,
+    "Insert opens the CrabeLoader console")
 ITEMS[#ITEMS + 1] = Items.info("Controller", "RB + \226\134\144 menu", "Hold RB and press left on the D-pad")
 
 return {

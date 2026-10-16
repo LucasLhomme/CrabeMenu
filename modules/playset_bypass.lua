@@ -200,6 +200,14 @@ local function tagAllCharactersForDory()
 end
 
 local function applyLuaLayer()
+    -- 1. Neutralize Disney's Onboard Tutorial (which intentionally disables Back/Escape in Win32 menus)
+    if rawget(Globals, "UI_IsOnboardTutorialActive") ~= nil then
+        rawset(Globals, "UI_IsOnboardTutorialActive", function() return false end)
+    end
+    if rawget(Globals, "UI_ShouldOnboardTutorialRestrictInput") ~= nil then
+        rawset(Globals, "UI_ShouldOnboardTutorialRestrictInput", function() return false end)
+    end
+
     local current = rawget(Globals, "VirtualReaderPC_GetBrandFromCurrentPlaySet")
     if type(current) == "function" and current ~= noBrand then
         brandOriginal = current
@@ -210,6 +218,77 @@ local function applyLuaLayer()
         hardenGrid(grid)
         hardenedGrid = grid
     end
+
+    local vrpc = rawget(Globals, "VirtualReaderPC")
+    if type(vrpc) == "table" and type(vrpc.IsOnboardTutorialActive) == "function" then
+        vrpc.IsOnboardTutorialActive = function() return false end
+    end
+
+    local loadout = rawget(Globals, "VirtualReaderPC_Loadout")
+    if type(loadout) == "table" then
+        if loadout.IsOnboardTutorialActive ~= nil then
+            loadout.IsOnboardTutorialActive = function() return false end
+        end
+        if type(loadout.ScreenDefinition) == "table" then
+            loadout.ScreenDefinition.doLuaInput = true
+        end
+        if type(loadout.HandleCloseButton) == "function" and not loadout._crabeNavPatched then
+            loadout._crabeNavPatched = true
+            local origClose = loadout.HandleCloseButton
+            loadout.HandleCloseButton = function(self)
+                if not self.hitContinue then
+                    if self.loadUGCHandle ~= nil then
+                        local h = UI.GetHandleFromName(self.loadUGCHandle, self.InstanceData.playerNum)
+                        if h ~= UI.INVALID_UI_HANDLE then
+                            self:CallScreenFunctionByScreenName(self.loadUGCHandle, self.InstanceData.playerNum, "SetScreenActive", true)
+                            self:CallScreenFunctionByScreenName(self.loadUGCHandle, self.InstanceData.playerNum, "SetFocus", true)
+                        end
+                    else
+                        local psHandle = UI.GetHandleFromName("PlaysetSelectMenu", 0)
+                        if psHandle ~= UI.INVALID_UI_HANDLE then
+                            self:CallScreenFunctionByScreenName("PlaysetSelectMenu", self.InstanceData.playerNum, "SetScreenActive", true)
+                            self:CallScreenFunctionByScreenName("PlaysetSelectMenu", self.InstanceData.playerNum, "SetFocus", true)
+                        else
+                            local plHandle = UI.GetHandleFromName("PlaysetListWin32", 0)
+                            if plHandle ~= UI.INVALID_UI_HANDLE then
+                                self:CallScreenFunctionByScreenName("PlaysetListWin32", self.InstanceData.playerNum, "SetScreenActive", true)
+                                self:CallScreenFunctionByScreenName("PlaysetListWin32", self.InstanceData.playerNum, "SetFocus", true)
+                            end
+                        end
+                    end
+                end
+                origClose(self)
+            end
+        end
+    end
+
+    local tabs = rawget(Globals, "VirtualReaderPC_Tabs")
+    if type(tabs) == "table" and tabs.IsOnboardTutorialActive ~= nil then
+        tabs.IsOnboardTutorialActive = function() return false end
+    end
+
+    local plw = rawget(Globals, "PlaysetListWin32")
+    if type(plw) == "table" and type(plw.GoBack) == "function" and not plw._crabeNavPatched then
+        plw._crabeNavPatched = true
+        plw.GoBack = function(self)
+            if self.cloudLoadStarted then return end
+            self:RequestExit()
+        end
+    end
+
+    local mb = rawget(Globals, "MenuBase")
+    if type(mb) == "table" and type(mb.GoBack) == "function" and not mb._crabeNavPatched then
+        mb._crabeNavPatched = true
+        mb.GoBack = function(self)
+            self:RequestExit()
+        end
+    end
+
+    local charGrid = rawget(Globals, "VirtualReaderPC_GridCharacter")
+    if type(charGrid) == "table" and charGrid.IsOnboardTutorialActive ~= nil then
+        charGrid.IsOnboardTutorialActive = function() return false end
+    end
+
     tagAllCharactersForDory()
 end
 
