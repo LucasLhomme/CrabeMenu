@@ -1,9 +1,9 @@
 local Loader = ...
 local State = Loader.load("core.state")
 
--- "Any Character in Any Playset": AaBysT's "Anyone Can Cook II" exe patch,
--- ported to CrabeLoader (first in Disney Infinity Complete, now owned here).
--- Eleven native barriers, each found by signature and flipped in memory:
+-- "Any Character in Any Playset": AaBysT's "Anyone Can Cook II" patch,
+-- ported to CrabeLoader with full runtime data transplantation.
+-- Native barriers found by signature and flipped in memory:
 --   S1    ValidateCurrentCharacter no longer resets the character (jnz -> jmp)
 --   S2-S5 no forced playset character (Empire / InsideOut / TheCloneWars / PlaysetX)
 --   S6    VirtualReaderPC_GetBrandFromCurrentPlaySet returns nothing (Lua sees nil)
@@ -11,7 +11,13 @@ local State = Loader.load("core.state")
 --   S8    IGPGameFlow::IsMatchingPlaysets returns true (any character in any playset)
 --   S9    IGPGameFlow::MissingAvatarCheck skips the DialogType_MissingAvatarQuit popup
 --   S10   VirtualReaderPC_GetItemByPage: zone filter off (every character listed)
---   S11   VirtualReaderPC_GetItemByPage: lock filter off (every character selectable)
+--   S12   StandAloneLoop::LoadActorLists: loads every playset's actors.lua (native engine loop)
+--   S13   StandAloneLoop::LoadDataMaps: loads every playset's DataMap.lua & munitions (native engine loop)
+--   S14   CTool::IsAllowedInLevel: bypasses LevelPrefix restriction for 1.0 character innate ranged tools
+--   S15   GameplayDataMap::LoadGameplayDataMap: merges duplicate DataMap records across all playsets
+-- Note: S11 (previously "GridLockFilterBypass") is intentionally NOT applied and restored:
+--   it NOPped FilterMetaData, which broke category filtering and dumped every figure
+--   from all franchises into every category in disorder.
 -- plus a Lua layer, re-applied every tick because the game reloads these
 -- globals with its screens: the Lua brand lookup returns nil, the character
 -- grid is hardened against the tables the disabled filters no longer fill,
@@ -60,11 +66,42 @@ local SIGNATURES = {
       pattern = "56 8B CF E8 ?? ?? ?? ?? 84 C0 74 28 8D 44 24 64 50 8D 4C 24 58",
       patched = "56 8B CF E8 ?? ?? ?? ?? 84 C0 90 90 8D 44 24 64 50 8D 4C 24 58",
       original = "74 28", bytes = "90 90" },
-    { name = "S11 GridLockFilterBypass", offset = 10,
-      pattern = "56 8B CF E8 ?? ?? ?? ?? 84 C0 74 12 8D 54 24 10 52",
-      patched = "56 8B CF E8 ?? ?? ?? ?? 84 C0 90 90 8D 54 24 10 52",
-      original = "74 12", bytes = "90 90" },
+    { name = "S12 LoadAllActorLists", offset = 43,
+      pattern = "C6 45 54 00 8B 0D ?? ?? ?? ?? 8B 81 9C 01 00 00 6A 00 6A 00 50 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 74 24 20 84 C0 75 ?? 85 F6 74 ?? 32 DB",
+      patched = "C6 45 54 00 8B 0D ?? ?? ?? ?? 8B 81 9C 01 00 00 6A 00 6A 00 50 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 74 24 20 84 C0 75 ?? 85 F6 74 ?? B3 01",
+      original = "32 DB", bytes = "B3 01" },
+    { name = "S13 LoadAllDataMaps", offset = 43,
+      pattern = "C6 45 55 00 8B 0D ?? ?? ?? ?? 8B 81 9C 01 00 00 6A 00 6A 00 50 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 74 24 20 84 C0 75 ?? 85 F6 74 ?? 32 DB",
+      patched = "C6 45 55 00 8B 0D ?? ?? ?? ?? 8B 81 9C 01 00 00 6A 00 6A 00 50 68 ?? ?? ?? ?? E8 ?? ?? ?? ?? 8B 74 24 20 84 C0 75 ?? 85 F6 74 ?? B3 01",
+      original = "32 DB", bytes = "B3 01" },
+    { name = "S14 ToolLevelPrefixBypass", offset = 27,
+      pattern = "53 8B D9 83 7B 74 FF 0F 85 A6 00 00 00 56 33 F6 57 8B 7C 24 10 89 73 74 39 77 08 75 09",
+      patched = "53 8B D9 83 7B 74 FF 0F 85 A6 00 00 00 56 33 F6 57 8B 7C 24 10 89 73 74 39 77 08 90 90",
+      original = "75 09", bytes = "90 90" },
+    { name = "S15 DataMapMergeDuplicates", offset = 9,
+      pattern = "80 7C 24 13 00 75 08 84 C0 0F 84 14 04 00 00",
+      patched = "80 7C 24 13 00 75 08 84 C0 90 90 90 90 90 90",
+      original = "0F 84 14 04 00 00", bytes = "90 90 90 90 90 90" },
 }
+
+-- S11 in AaBysT's original patch was misidentified as a lock bypass, but it actually
+-- NOPped VirtualReaderPC::FilterMetaData. That broke category filtering and dumped
+-- all 105 characters from Star Wars, Marvel and Disney into every tab in disorder.
+-- We actively restore it to keep categories cleanly filtered and sorted.
+local S11_RESTORE = {
+    pattern = "56 8B CF E8 ?? ?? ?? ?? 84 C0 90 90 8D 54 24 10 52",
+    offset = 10,
+    original = "74 12",
+}
+
+local function restoreS11()
+    if not (Crabe.Memory and Crabe.Memory.patternScan and Crabe.Memory.patchBytes) then return end
+    local address = Crabe.Memory.patternScan(S11_RESTORE.pattern)
+    if address then
+        Crabe.Memory.patchBytes(address + S11_RESTORE.offset, S11_RESTORE.original)
+        log("Restored S11 FilterMetaData: categories and character sorting preserved")
+    end
+end
 
 local GRID_METHODS = {
     "PressedBaseFilterButton",
@@ -104,6 +141,7 @@ end
 
 -- Writes every site to its patched or original bytes; returns how many took.
 local function writeAll(wantPatched)
+    restoreS11()
     local done = 0
     for _, sig in ipairs(SIGNATURES) do
         local address = locate(sig)
@@ -182,6 +220,76 @@ local function removeLuaLayer()
     brandOriginal = nil
 end
 
+-- Data layer -----------------------------------------------------------------
+
+local PLAYSETS = {
+    { id = "theclonewars", package = "TheCloneWars" },
+    { id = "empire",       package = "Empire" },
+    { id = "playsetx",     package = "PlaysetX" },
+    { id = "insideout",    package = "InsideOut" },
+}
+
+local dataPatchesRegistered = false
+
+local function registerDataPatches()
+    if dataPatchesRegistered then return end
+    if not (Crabe.Hooks and type(Crabe.Hooks.patchChunk) == "function") then
+        log("Crabe.Hooks.patchChunk not available, skipping data layer")
+        return
+    end
+
+    local datamapParts = {}
+    local actorlistParts = {}
+
+    for _, p in ipairs(PLAYSETS) do
+        local okDm, dm = pcall(Loader.load, "modules.playset_patches." .. p.id .. "_datamap")
+        local okAl, al = pcall(Loader.load, "modules.playset_patches." .. p.id .. "_actorlist")
+        local okBm, bm = pcall(Loader.load, "modules.playset_patches." .. p.id .. "_bitmasks")
+
+        if okDm and type(dm) == "string" then datamapParts[#datamapParts + 1] = dm end
+        if okAl and type(al) == "string" then actorlistParts[#actorlistParts + 1] = al end
+        if okBm and type(bm) == "string" then
+            Crabe.Hooks.patchChunk("Package = '" .. p.package .. "'", bm)
+        end
+    end
+
+    local nativeAllLoaded = sites["S12 LoadAllActorLists"] and sites["S13 LoadAllDataMaps"]
+    if not nativeAllLoaded then
+        if #datamapParts > 0 then
+            Crabe.Hooks.patchChunk("DataMap", table.concat(datamapParts, "\n"))
+        end
+        if #actorlistParts > 0 then
+            Crabe.Hooks.patchChunk("ActorList", table.concat(actorlistParts, "\n"))
+        end
+    else
+        -- GameplayDataMap::LoadPlayset only runs _loadforallplaysets_ and the active playset,
+        -- never DataMap.Playset["toybox"] where munitions_toybox.lua and surfaceimpacts.lua live.
+        local toyboxMunitionsPatch = [[
+if DataMap and DataMap.Playset then
+    local extraFiles = {
+        "GameDB|gamedb/core/munitions_toybox.lua|1|munitions",
+        "GameDB|gamedb/toybox/surfaceimpacts.lua|1|surfaceImpacts",
+    }
+    local function addExtra(tbl)
+        if not (tbl and tbl.Files) then return end
+        local seen = {}
+        for _, f in ipairs(tbl.Files) do seen[f] = true end
+        for _, f in ipairs(extraFiles) do
+            if not seen[f] then tbl.Files[#tbl.Files + 1] = f end
+        end
+    end
+    addExtra(DataMap.Playset._loadforallplaysets_)
+    for _, ps in pairs(DataMap.Playset) do addExtra(ps) end
+end
+]]
+        Crabe.Hooks.patchChunk("DataMap", toyboxMunitionsPatch)
+        log("Native engine loop active (S12-S15): registered lightweight ToyBox munitions patch")
+    end
+
+    dataPatchesRegistered = true
+    log(string.format("Bitmasks and data patches registered for %d Play Sets", #PLAYSETS))
+end
+
 -- Public API -----------------------------------------------------------------
 
 --- Reports whether the barriers are currently lifted.
@@ -189,17 +297,22 @@ function PlaysetBypass.isEnabled()
     return enabled
 end
 
---- Returns how many of the eleven native barriers the last switch flipped, and the total.
+--- Returns how many of the native barriers the last switch flipped, and the total.
 function PlaysetBypass.patchCount()
     return patched, total
 end
 
---- Lifts (true) or restores (false) the eleven barriers and the Lua layer.
+--- Lifts (true) or restores (false) the native barriers, the Lua layer and the data layer.
 --- The choice is kept in State.playsetBypass for core.settings to save.
 function PlaysetBypass.setEnabled(on)
     on = on == true
     patched = writeAll(on)
-    if on then applyLuaLayer() else removeLuaLayer() end
+    if on then
+        registerDataPatches()
+        applyLuaLayer()
+    else
+        removeLuaLayer()
+    end
     enabled = on
     State.playsetBypass = on
 
@@ -214,8 +327,14 @@ function PlaysetBypass.setEnabled(on)
     return true
 end
 
+local s11VerifiedOnTick = false
+
 --- Re-applies the Lua layer; call once per tick. The native patches stay put.
 function PlaysetBypass.onTick()
+    if not s11VerifiedOnTick then
+        s11VerifiedOnTick = true
+        restoreS11()
+    end
     if enabled then applyLuaLayer() end
 end
 

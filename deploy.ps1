@@ -25,18 +25,24 @@ if (!(Test-Path $gameDir)) {
 
 if (!(Test-Path $modsTarget)) { New-Item -ItemType Directory -Force -Path $modsTarget | Out-Null }
 
-if (Test-Path $menuTarget) { Remove-Item -Path $menuTarget -Recurse -Force }
-New-Item -ItemType Directory -Force -Path $menuTarget | Out-Null
+if (Test-Path $menuTarget) {
+    Get-ChildItem -Path $menuTarget -Force | Remove-Item -Recurse -Force
+} else {
+    New-Item -ItemType Directory -Force -Path $menuTarget | Out-Null
+}
 foreach ($item in $menuItems) {
     Copy-Item -Path (Join-Path $PSScriptRoot $item) -Destination $menuTarget -Recurse -Force
 }
 Remove-Bom $menuTarget
 Write-Host "[OK] CrabeMenu -> $menuTarget" -ForegroundColor Green
 
-$legacyMenu = Join-Path $modsTarget "crabemenu.lua"
-if (Test-Path $legacyMenu) {
-    Remove-Item -Path $legacyMenu -Force
-    Write-Host "[OK] Removed legacy $legacyMenu (it would load the menu twice)" -ForegroundColor Green
+$legacyMods = @("crabemenu.lua", "playable_anywhere")
+foreach ($old in $legacyMods) {
+    $path = Join-Path $modsTarget $old
+    if (Test-Path $path) {
+        Remove-Item -Path $path -Recurse -Force
+        Write-Host "[OK] Removed legacy $path (feature is built into CrabeMenu)" -ForegroundColor Green
+    }
 }
 
 if (-not $Full) {
@@ -45,22 +51,45 @@ if (-not $Full) {
 }
 
 $loaderRoot = "E:\Dev\DIM2\CrabeLoader"
-$dllCandidates = @(
-    "$loaderRoot\build\vs2022-dll\Release\bink2w32.dll",
-    "$loaderRoot\Release\bink2w32.dll",
-    "$loaderRoot\build\Release\bink2w32.dll"
+
+# A 1.0 loader left as bink2w32.dll outranks CrabeLoader.asi, so the game's own Bink DLL goes back first.
+function Restore-LegacyBink([string]$dir) {
+    $legacyProxy = Join-Path $dir "bink2w32.dll"
+    $legacyBackup = Join-Path $dir "bink2w32_orig.dll"
+    if (Test-Path $legacyBackup) {
+        try {
+            Move-Item -Path $legacyBackup -Destination $legacyProxy -Force -ErrorAction Stop
+            Write-Host "[OK] Game bink2w32.dll restored (CrabeLoader is CrabeLoader.asi since 1.1)" -ForegroundColor Green
+        } catch {
+            Write-Warning "bink2w32.dll is in use by the running game (legacy restore skipped)."
+        }
+        return
+    }
+    if ((Test-Path $legacyProxy) -and
+        [Text.Encoding]::Unicode.GetString([IO.File]::ReadAllBytes($legacyProxy)).Contains("CrabeLoader Proxy DLL")) {
+        Write-Warning "bink2w32.dll is an old CrabeLoader and no bink2w32_orig.dll exists: run CrabeInstaller or Steam's file check."
+    }
+}
+
+Restore-LegacyBink $gameDir
+$buildCandidates = @(
+    "$loaderRoot\build\vs2022-dll\Release",
+    "$loaderRoot\Release",
+    "$loaderRoot\build\Release"
 )
-$dllSource = $dllCandidates | Where-Object { Test-Path $_ } |
-    Sort-Object { (Get-Item $_).LastWriteTime } -Descending | Select-Object -First 1
-if ($dllSource) {
-    try {
-        Copy-Item -Path $dllSource -Destination "$gameDir\bink2w32.dll" -Force -ErrorAction Stop
-        Write-Host "[OK] bink2w32.dll ($dllSource) -> $gameDir" -ForegroundColor Green
-    } catch {
-        Write-Warning "bink2w32.dll is in use by the running game (DLL sync skipped)."
+$buildFolder = $buildCandidates | Where-Object { (Test-Path "$_\CrabeLoader.asi") -and (Test-Path "$_\dinput8.dll") } |
+    Sort-Object { (Get-Item "$_\CrabeLoader.asi").LastWriteTime } -Descending | Select-Object -First 1
+if ($buildFolder) {
+    foreach ($file in @("CrabeLoader.asi", "dinput8.dll")) {
+        try {
+            Copy-Item -Path "$buildFolder\$file" -Destination "$gameDir\$file" -Force -ErrorAction Stop
+            Write-Host "[OK] $file ($buildFolder) -> $gameDir" -ForegroundColor Green
+        } catch {
+            Write-Warning "$file is in use by the running game (sync skipped)."
+        }
     }
 } else {
-    Write-Warning "No bink2w32.dll found to deploy."
+    Write-Warning "No CrabeLoader.asi + dinput8.dll build found to deploy (build CrabeLoader 1.1 first)."
 }
 
 $windowMode = "$loaderRoot\mods\window_mode.lua"

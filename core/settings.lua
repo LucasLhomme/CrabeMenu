@@ -20,6 +20,7 @@ function Settings.load()
     if Config.SCALES[tonumber(saved.scaleIndex) or 0] then State.scaleIndex = tonumber(saved.scaleIndex) end
     if saved.overlay == true then State.isOverlayOpen = true end
     if type(saved.playsetBypass) == "boolean" then State.playsetBypass = saved.playsetBypass end
+    if type(saved.lockControls) == "boolean" then State.lockControls = saved.lockControls end
 end
 
 --- Writes the current menu side, size, overlay and playset bypass choices to disk.
@@ -32,6 +33,7 @@ function Settings.save()
         scaleIndex = State.scaleIndex,
         overlay = State.isOverlayOpen,
         playsetBypass = State.playsetBypass,
+        lockControls = State.lockControls,
     })
 end
 
