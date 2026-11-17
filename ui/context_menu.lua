@@ -32,6 +32,18 @@ local function setCursorUnlocked(wantUnlock)
     end
 end
 
+local rightClickBlocked = false
+
+--- Keeps the right mouse button away from the game while Alt is held or this menu is open.
+--- Otherwise Alt + right click also fires the hero's right-click action (throw) under the menu.
+local function blockGameRightClick(block)
+    if rightClickBlocked == block then return end
+    rightClickBlocked = block
+    if Crabe and Crabe.Input and Crabe.Input.remapMouseButton then
+        Crabe.Input.remapMouseButton(1, block and -1 or 1)
+    end
+end
+
 local function keyPressed(vk)
     local down = Crabe and Crabe._keyDown and (Crabe._keyDown(vk) == 1) or false
     local prev = keyEdges[vk] or false
@@ -215,10 +227,12 @@ function ContextMenu.update()
     if State.isMenuOpen or State.isTyping then
         if State.isContextMenuOpen then closeMenu() end
         setCursorUnlocked(false)
+        rightClickBlocked = false
         return
     end
 
     local altDown = Crabe and Crabe._keyDown and (Crabe._keyDown(0x12) == 1) or false
+    blockGameRightClick(altDown or State.isContextMenuOpen)
     local freeCamOn = FreeCam.isActive()
     setCursorUnlocked(State.isContextMenuOpen or altDown or freeCamOn)
 

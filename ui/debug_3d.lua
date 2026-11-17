@@ -330,6 +330,31 @@ local function normalizeCam(cam)
     }
 end
 
+--- Returns the camera of this very frame, read from the engine, with the plugin snapshot's field of view.
+--- The plugin publishes its snapshot from a worker thread, so drawing with it made boxes trail the view.
+local function liveCamera(snapshot)
+    if not (Crabe and Crabe.callNative and Crabe.hostPlayer) then return snapshot end
+    local player = Crabe.hostPlayer()
+    local okEye, ex, ey, ez = Crabe.callNative("CameraGetPosition", player)
+    local okDir, dx, dy, dz = Crabe.callNative("CameraGetFacingVector", player)
+    if not (okEye and okDir and ex and dx) then return snapshot end
+    return { x = ex, y = ey, z = ez, fx = dx, fy = dy, fz = dz, rx = 0, ry = 0, rz = 0, fov = snapshot.fov }
+end
+
+--- Moves the snapshot's selection box to where the actor is this frame.
+local function liveSelection(s)
+    if not (Game and Game.ActorPosition and s.handle and s.handle > 0) then return s end
+    local x, y, z = Game.ActorPosition(s.handle)
+    if not (x and s.x) then return s end
+    local dx, dy, dz = x - s.x, y - s.y, z - s.z
+    local moved = {}
+    for k, v in pairs(s) do moved[k] = v end
+    moved.x, moved.y, moved.z = x, y, z
+    moved.minX, moved.minY, moved.minZ = s.minX + dx, s.minY + dy, s.minZ + dz
+    moved.maxX, moved.maxY, moved.maxZ = s.maxX + dx, s.maxY + dy, s.maxZ + dz
+    return moved
+end
+
 function Debug3D.render()
     local modeMask = (State.show3DCollisions and 1 or 0)
         + (State.show3DSplines and 2 or 0)
@@ -353,7 +378,7 @@ function Debug3D.render()
     local frame = parseDebug3dStream(rawStream)
     if not frame or not frame.cam then return end
 
-    local cam = normalizeCam(frame.cam)
+    local cam = normalizeCam(liveCamera(frame.cam))
     if not cam then return end
 
     local tanHalfFov = math.tan(math.rad(cam.fov or DEFAULT_FOV_DEG) * 0.5)
@@ -490,7 +515,7 @@ function Debug3D.render()
 
     -- 4. Selected Actor Highlight & Floating AI Debug Text (Dark Obsidian)
     if frame.sel then
-        local s = frame.sel
+        local s = liveSelection(frame.sel)
         State.selectedActor = s
         draw3DBox({ s.minX, s.minY, s.minZ }, { s.maxX, s.maxY, s.maxZ },
                   cam, screenW, screenH, tanHalfFov, Theme.color("gold", 230), 2)
