@@ -15,6 +15,14 @@ PosableHeroes.ANGLES = {}
 for degrees = 0, 345, 15 do PosableHeroes.ANGLES[#PosableHeroes.ANGLES + 1] = degrees end
 PosableHeroes.SCALES = { 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 5 }
 PosableHeroes.STEPS = { 0.1, 0.25, 0.5, 1, 2, 5 }
+PosableHeroes.FREEZE_DELAYS = { 0, 0.25, 0.5, 0.75, 1, 1.5, 2, 3 }
+PosableHeroes.POSES = {
+    { id = "Cinematic_Celebrate", label = "Victory pose" },
+    { id = "CELEBRATE", label = "Celebrate" },
+    { id = "CELEBRATE_SMALL", label = "Small celebration" },
+    { id = "CELEBRATE_SMALL_MBA", label = "Fist pump" },
+    { id = "IDLE_BREAK", label = "Idle break" },
+}
 
 local store = package.loaded[STORE_KEY]
 if type(store) ~= "table" then
@@ -24,6 +32,7 @@ end
 PosableHeroes.store = store
 PosableHeroes.placed = store.placed
 PosableHeroes.stepIndex = 3
+PosableHeroes.freezeDelayIndex = 1
 
 local clock, nextPrune = 0, PRUNE_INTERVAL
 
@@ -193,6 +202,7 @@ function PosableHeroes.spawn(entry)
     if not handle then return Native.fail("Posable heroes: the engine did not create " .. entry.label) end
 
     Native.poll(Game.SetActorState, handle, "Unkillable", true)
+    Crabe.callNative("SendSuspendAIEvent", handle, 0)
     store.placed[#store.placed + 1] = {
         handle = handle,
         id = entry.id,
@@ -299,14 +309,22 @@ end
 function PosableHeroes.setFrozen(hero, frozen)
     if not call("SendSuspendAIEvent", hero.handle, frozen and 1 or 0) then return false end
     hero.frozen = frozen
+    hero.freezeAt = nil
     return true
 end
 
---- Sends an animation event, such as CELEBRATE, to a hero's animation tree.
---- A hero with no player behind it ignores most events, so this stays experimental.
+--- Plays an animation event, such as CELEBRATE, then freezes the hero after the chosen delay, if any.
+--- A spawned hero only reacts once its animation tree was woken by a resume event, which spawn sends.
 function PosableHeroes.playEvent(hero, event)
+    if hero.frozen and not PosableHeroes.setFrozen(hero, false) then return false end
     if not call("SendAnimTreeEvent", hero.handle, event) then return false end
-    State.setStatus(hero.label .. ": sent " .. event, "info")
+    local delay = PosableHeroes.FREEZE_DELAYS[PosableHeroes.freezeDelayIndex]
+    if delay > 0 then
+        hero.freezeAt = os.clock() + delay
+        State.setStatus(string.format("%s: %s, freezing in %gs", hero.label, event, delay), "success")
+    else
+        State.setStatus(hero.label .. ": " .. event, "success")
+    end
     return true
 end
 
@@ -356,12 +374,20 @@ local function prune()
     end
 end
 
---- Forgets heroes the world no longer has (world change, death); call once per tick.
+--- Runs the delayed pose freezes and forgets heroes the world no longer has; call once per tick.
 function PosableHeroes.onTick(dt)
     clock = clock + (dt or 0)
-    if #store.placed == 0 or clock < nextPrune or not PosableHeroes.isAvailable() then return end
-    nextPrune = clock + PRUNE_INTERVAL
-    prune()
+    if #store.placed == 0 or not PosableHeroes.isAvailable() then return end
+    for _, hero in ipairs(store.placed) do
+        if hero.freezeAt and os.clock() >= hero.freezeAt then
+            hero.freezeAt = nil
+            PosableHeroes.setFrozen(hero, true)
+        end
+    end
+    if clock >= nextPrune then
+        nextPrune = clock + PRUNE_INTERVAL
+        prune()
+    end
 end
 
 return PosableHeroes

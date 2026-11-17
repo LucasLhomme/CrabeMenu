@@ -13,6 +13,8 @@ end
 local ANGLE_LABELS = labels(PosableHeroes.ANGLES, "%d deg")
 local SCALE_LABELS = labels(PosableHeroes.SCALES, "x%g")
 local STEP_LABELS = labels(PosableHeroes.STEPS, "%g m")
+local DELAY_LABELS = labels(PosableHeroes.FREEZE_DELAYS, "%gs")
+DELAY_LABELS[1] = "Never"
 local NUDGE = { "<", "<  hold  >", ">" }
 
 --- A row that calls apply(-1) on left and apply(1) on right, again and again while the key is held.
@@ -35,7 +37,7 @@ local function eventPage(hero)
         fields = { "id" },
         toItem = function(entry)
             return Items.action(entry.label, function() PosableHeroes.playEvent(hero, entry.id) end,
-                "Sends " .. entry.id .. "; a hero with no player ignores most events")
+                "Plays " .. entry.id .. "; an event only works where the animation tree expects it")
         end,
         emptyLabel = "No event listed",
         emptyHint = "characters/biped/biped.animtreeproject could not be read",
@@ -64,18 +66,27 @@ local function editorPage(hero)
             function(index) PosableHeroes.setScale(hero, index) end),
         Items.toggle("Collision", function() return hero.collision end,
             function(on) PosableHeroes.setCollision(hero, on) end, "Off lets you walk through it"),
-        Items.section("Pose"),
+        Items.section("Pose & Animation"),
         Items.toggle("Freeze pose", function() return PosableHeroes.isFrozen(hero) end,
             function(on) PosableHeroes.setFrozen(hero, on) end, "Stops the hero in its current pose, like a statue"),
-        Items.submenu("Animation events (experimental)", eventPage(hero),
-            "Events of the hero animation tree; most are ignored by a hero with no player",
+        Items.choice("Freeze after", DELAY_LABELS, function() return PosableHeroes.freezeDelayIndex end,
+            function(index) PosableHeroes.freezeDelayIndex = index end,
+            "Each animation below freezes the hero this long after it starts: pick the moment of your shot"),
+    }
+    for _, pose in ipairs(PosableHeroes.POSES) do
+        items[#items + 1] = Items.action(pose.label, function() PosableHeroes.playEvent(hero, pose.id) end,
+            "Plays " .. pose.id)
+    end
+    for _, item in ipairs({
+        Items.submenu("All animation events", eventPage(hero),
+            "Every event of the hero animation tree; many only work from a matching state",
             function() return tostring(#PosableHeroes.events()) end),
         Items.section("Delete"),
         Items.action("Remove", function()
             PosableHeroes.remove(hero)
             Menu.back()
         end, "Deletes this hero"),
-    }
+    }) do items[#items + 1] = item end
     return { title = hero.label, items = function() return items end }
 end
 

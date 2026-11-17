@@ -62,7 +62,7 @@ Disney Infinity Complete defers to this copy when CrabeMenu is installed.
 
 A **Modded** spawner entry is one whose asset file a mod shadows in the VFS (needs a CrabeLoader with `Crabe.Vfs.list`).
 
-**Posable Heroes** need a CrabeLoader with `Crabe.callNative`. Heroes survive a mod reload (F4) and are forgotten on a world change. Animation events are experimental: a hero with no player ignores most of them.
+**Posable Heroes** need a CrabeLoader with `Crabe.callNative`. Heroes survive a mod reload (F4) and are forgotten on a world change. Poses (victory, celebrate, fist pump…) play on any hero; **Freeze after** stops it mid-animation for screenshots. Other animation events only work from the state the animation tree expects.
 A reskin keeps the game's item id, so the list shows the vanilla name followed by the mod's name.
 
 Every action reports its real outcome in the footer. A failing native shows an error and is written to
