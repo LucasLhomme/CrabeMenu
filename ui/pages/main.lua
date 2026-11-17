@@ -11,7 +11,7 @@ end
 local ITEMS = {}
 for _, item in ipairs({
     Items.submenu("Player & Heroes", Loader.load("ui.pages.player"), "Change hero, level up, Sparks"),
-    Items.submenu("World Editor", Loader.load("ui.pages.editor"), "Level design, asset placement & Mod exporter (F1)"),
+    Items.submenu("World Editor", Loader.load("ui.pages.editor"), "Level design, asset placement & Mod exporter"),
     Items.submenu("Spawners", Loader.load("ui.pages.spawners"), "Spawn NPCs, objects, weapons and tools"),
     Items.submenu("Animations", Loader.load("ui.pages.animations"), "Play any of the game's choreographies on your hero"),
     Items.submenu("Cheats", Loader.load("ui.pages.cheats"), "God mode, game speed, Toy Box editor"),

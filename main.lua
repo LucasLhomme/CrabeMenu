@@ -55,6 +55,7 @@ local NoFall = Loader.load("modules.nofall")
 local Stealth = Loader.load("modules.stealth")
 local PosableHeroes = Loader.load("modules.posable_heroes")
 local Editor = Loader.load("modules.editor")
+local FreeCam = Loader.load("modules.freecam")
 
 if Crabe and Crabe.Sandbox and Crabe.Sandbox.export then
     Crabe.Sandbox.export("Editor", Editor)
@@ -63,7 +64,7 @@ if Crabe and Crabe.Sandbox and Crabe.Sandbox.export then
         State = State,
         Cheats = Cheats,
         Editor = Editor,
-        FreeCam = Loader.load("modules.freecam"),
+        FreeCam = FreeCam,
         Spawner = Loader.load("modules.spawner"),
     })
 end
@@ -110,7 +111,7 @@ Crabe.Mod.register({
         Stealth.onTick()
         PosableHeroes.onTick(dt)
         PlaysetBypass.onTick()
-        if Input.editorToggled() and not State.isTyping then Editor.toggle() end
+        if Input.freeCamToggled() and not State.isTyping then FreeCam.toggle() end
         if Editor and Editor.onTick then Editor.onTick(dt) end
         Overlay.update(dt)
         SpeedrunHud.update(dt)

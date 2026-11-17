@@ -206,9 +206,9 @@ function Input.mouseLeftClicked()
     return rising("mouse_l", isKeyDown(0x01))
 end
 
---- Reports a fresh press of F1, the World Editor key.
-function Input.editorToggled()
-    return rising("editor_f1", isKeyDown(0x70))
+--- Reports a fresh press of F1, the free camera key.
+function Input.freeCamToggled()
+    return rising("freecam_f1", isKeyDown(0x70))
 end
 
 function Input.mouseRightClicked()

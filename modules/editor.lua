@@ -18,9 +18,6 @@ Editor.history = {}
 Editor.quests = {}
 Editor.selectedQuestGiver = nil
 
-local TOGGLE_DEBOUNCE = 0.4
-local lastToggleClock = -1
-
 local function inFrontEnd()
     local world = Native.poll(Game.CurrentWorld)
     return type(world) ~= "string" or world:lower() == "frontend"
@@ -49,12 +46,8 @@ function Editor.selectAsset(id, label)
     State.setStatus(string.format("Selected asset: %s", Editor.selectedLabel), "info")
 end
 
---- Toggles the World Editor & Debug Mode (F1).
+--- Toggles the World Editor & Debug Mode.
 function Editor.toggle(mode)
-    if mode == nil then
-        if State.gameClock - lastToggleClock < TOGGLE_DEBOUNCE then return Editor.active end
-        lastToggleClock = State.gameClock
-    end
     if inFrontEnd() then
         State.setStatus("Load a world before entering Editor Mode", "warning")
         return false
@@ -92,7 +85,7 @@ function Editor.toggle(mode)
             Crabe.Plugins.set("dev_toolkit.editormode", "1")
         end
 
-        State.setStatus("WORLD EDITOR ACTIVE | F1: Exit | F5: Asset Palette | Place & Build", "success")
+        State.setStatus("WORLD EDITOR ACTIVE | F5: Asset Palette | Place & Build", "success")
         return true
 
     elseif not shouldEnable and Editor.active then
