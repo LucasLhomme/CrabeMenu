@@ -104,7 +104,7 @@ end
 
 local function buildPage()
     local items = {
-        Items.section("World Editor & Debug (F1)"),
+        Items.section("World Editor & Debug"),
         Items.toggle(
             "Editor Mode Active",
             function() return Editor.isActive() end,
