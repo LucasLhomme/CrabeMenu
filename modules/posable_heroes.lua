@@ -15,6 +15,12 @@ PosableHeroes.ANGLES = {}
 for degrees = 0, 345, 15 do PosableHeroes.ANGLES[#PosableHeroes.ANGLES + 1] = degrees end
 PosableHeroes.SCALES = { 0.25, 0.5, 0.75, 1, 1.25, 1.5, 2, 3, 5 }
 PosableHeroes.STEPS = { 0.1, 0.25, 0.5, 1, 2, 5 }
+PosableHeroes.FRANCHISES = {
+    { key = "starwars", title = "Star Wars" },
+    { key = "marvel", title = "Marvel" },
+    { key = "disney", title = "Disney & Pixar" },
+    { key = "modded", title = "Modded" },
+}
 PosableHeroes.FREEZE_DELAYS = { 0, 0.25, 0.5, 0.75, 1, 1.5, 2, 3 }
 PosableHeroes.POSES = {
     { id = "Cinematic_Celebrate", label = "Victory pose" },
@@ -37,6 +43,8 @@ PosableHeroes.freezeDelayIndex = 1
 local clock, nextPrune = 0, PRUNE_INTERVAL
 
 local characters, events
+local byFranchise = {}
+local FRANCHISE_TAGS = { StarWars = "starwars", Marvel = "marvel", Disney = "disney" }
 
 --- Reports whether this CrabeLoader can create actors and call the engine's script natives.
 function PosableHeroes.isAvailable()
@@ -78,6 +86,7 @@ local function catalogRows()
                 Name = name,
                 sku_id = block:match('sku_id%s*=%s*"([^"]*)"'),
                 ProgressionTree = block:match('ProgressionTree%s*=%s*"([^"]*)"'),
+                MetaData = block:match('MetaData%s*=%s*"([^"]*)"'),
             }
         end
     end
@@ -122,6 +131,12 @@ local function labelFor(row, names)
     return label
 end
 
+local function franchiseOf(row)
+    if row.modded then return "modded" end
+    local tag = type(row.MetaData) == "string" and row.MetaData:match("^([^,]+)")
+    return FRANCHISE_TAGS[tag] or "disney"
+end
+
 local function byLabel(a, b)
     return a.label < b.label
 end
@@ -138,11 +153,22 @@ function PosableHeroes.characters()
         local dna = type(name) == "string" and not seen[name] and hero and dnaPath(name, modded)
         if dna then
             seen[name] = true
-            characters[#characters + 1] = { id = name, dna = dna, label = labelFor(row, names) }
+            characters[#characters + 1] = { id = name, dna = dna, label = labelFor(row, names), franchise = franchiseOf(row) }
         end
     end
     table.sort(characters, byLabel)
     return characters
+end
+
+--- Lists the heroes of one franchise key (starwars, marvel, disney or modded), sorted by name.
+function PosableHeroes.charactersOf(key)
+    if byFranchise[key] then return byFranchise[key] end
+    local list = {}
+    for _, entry in ipairs(PosableHeroes.characters()) do
+        if entry.franchise == key then list[#list + 1] = entry end
+    end
+    byFranchise[key] = list
+    return list
 end
 
 --- Lists every animation event of the shared biped animation tree, read once from the game files.
