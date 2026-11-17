@@ -142,7 +142,7 @@ end
 
 local function monitorItems()
     local list = {}
-    for _, row in ipairs(Overlay.ROWS) do list[#list + 1] = monitorRowToggle(row) end
+    for _, row in ipairs(Overlay.ROWS or {}) do list[#list + 1] = monitorRowToggle(row) end
     list[#list + 1] = Items.toggle("Cheat badges", function() return not State.monitorHidden.badges end, function(on)
         State.monitorHidden.badges = (not on) or nil
         Settings.save()

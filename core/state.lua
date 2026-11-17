@@ -5,6 +5,14 @@ local State = {
     isMenuOpen = false,
     isOverlayOpen = false,
     isSpeedrunHudOpen = false,
+    show3DCollisions = false,
+    show3DSplines = false,
+    show3DTriggers = false,
+    show3DAnimRig = false,
+    isContextMenuOpen = false,
+    selectedActor = nil,
+    editorSnapGrid = 0.0,
+    lastRayHit = nil,
     hudCorner = 4,
     hudHidden = {},
     monitorHidden = {},
@@ -37,7 +45,7 @@ local State = {
 local typingKeys = {}
 
 local function applyCapture()
-    if not State.isMenuOpen then
+    if not State.isMenuOpen and not State.isContextMenuOpen then
         Crabe.Input.captureKeys(nil)
         if Crabe.Input.capturePad then Crabe.Input.capturePad(false) end
         if Crabe.Input.captureDirectInput then Crabe.Input.captureDirectInput(false) end
@@ -45,6 +53,15 @@ local function applyCapture()
             State._controlsLockedByMenu = false
             Crabe.Input.clearRemap(Crabe.Input.DEVICE.MOUSE)
         end
+        return
+    end
+    if State.isContextMenuOpen and not State.isMenuOpen then
+        if Crabe.Input.captureDirectInput then Crabe.Input.captureDirectInput(true) end
+        Crabe.Input.captureKeys({
+            0x01, 0x02,
+            Config.VK.ESCAPE, Config.VK.ENTER,
+            Config.VK.UP, Config.VK.DOWN, Config.VK.LEFT, Config.VK.RIGHT,
+        })
         return
     end
 

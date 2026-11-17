@@ -16,7 +16,8 @@ local function loadLoader()
     local directory = scriptDirectory()
     if directory then table.insert(roots, 1, directory .. "/") end
 
-    for _, root in ipairs(roots) do
+    for i = 1, #roots do
+        local root = roots[i]
         local path = root .. "core/loader.lua"
         local file = io.open(path, "r")
         if file then
@@ -41,6 +42,8 @@ local Settings = Loader.load("core.settings")
 local Menu = Loader.load("ui.menu")
 local Overlay = Loader.load("ui.overlay")
 local SpeedrunHud = Loader.load("ui.speedrun_hud")
+local Debug3D = Loader.load("ui.debug_3d")
+local ContextMenu = Loader.load("ui.context_menu")
 local Cheats = Loader.load("modules.cheats")
 local PlayerModule = Loader.load("modules.player")
 local PlaysetBypass = Loader.load("modules.playset_bypass")
@@ -51,6 +54,19 @@ local SkillPoints = Loader.load("modules.skill_points")
 local NoFall = Loader.load("modules.nofall")
 local Stealth = Loader.load("modules.stealth")
 local PosableHeroes = Loader.load("modules.posable_heroes")
+local Editor = Loader.load("modules.editor")
+
+if Crabe and Crabe.Sandbox and Crabe.Sandbox.export then
+    Crabe.Sandbox.export("Editor", Editor)
+    Crabe.Sandbox.export("CrabeMenu", {
+        Loader = Loader,
+        State = State,
+        Cheats = Cheats,
+        Editor = Editor,
+        FreeCam = Loader.load("modules.freecam"),
+        Spawner = Loader.load("modules.spawner"),
+    })
+end
 
 local FALLBACK_FRAME_TIME = 0.016
 
@@ -94,8 +110,11 @@ Crabe.Mod.register({
         Stealth.onTick()
         PosableHeroes.onTick(dt)
         PlaysetBypass.onTick()
+        if Input.editorToggled() and not State.isTyping then Editor.toggle() end
+        if Editor and Editor.onTick then Editor.onTick(dt) end
         Overlay.update(dt)
         SpeedrunHud.update(dt)
+        if ContextMenu and ContextMenu.update then ContextMenu.update() end
         if State.isMenuOpen or State.isOverlayOpen then PlayerModule.updateLiveInfo() end
     end,
 
@@ -104,6 +123,8 @@ Crabe.Mod.register({
         Menu.render()
         if State.isOverlayOpen then Overlay.render() end
         if State.isSpeedrunHudOpen then SpeedrunHud.render() end
+        if Debug3D and Debug3D.render then Debug3D.render() end
+        if ContextMenu and ContextMenu.render then ContextMenu.render() end
     end,
 
     onShutdown = function()
