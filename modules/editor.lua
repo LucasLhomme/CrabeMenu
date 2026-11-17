@@ -95,9 +95,6 @@ function Editor.toggle(mode)
         if FreeCam.isActive() then
             FreeCam.toggle()
         end
-        if type(_G.System_UnlockAllControllers) == "function" then
-            pcall(_G.System_UnlockAllControllers)
-        end
 
         if Crabe and Crabe.Plugins and Crabe.Plugins.set then
             Crabe.Plugins.set("dev_toolkit.editormode", "0")

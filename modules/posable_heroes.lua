@@ -6,7 +6,6 @@ local PosableHeroes = {}
 
 local Globals = getfenv(0)
 local CATALOG_FILE = "assets/presentation/virtualreaderpc_data.lua"
-local EVENTS_FILE = "assets/characters/biped/biped.animtreeproject"
 local SPAWN_DISTANCE = 3
 local STORE_KEY = "crabemenu.posable_heroes"
 local PRUNE_INTERVAL = 2
@@ -42,7 +41,7 @@ PosableHeroes.freezeDelayIndex = 1
 
 local clock, nextPrune = 0, PRUNE_INTERVAL
 
-local characters, events
+local characters, animData
 local byFranchise = {}
 local FRANCHISE_TAGS = { StarWars = "starwars", Marvel = "marvel", Disney = "disney" }
 
@@ -171,19 +170,75 @@ function PosableHeroes.charactersOf(key)
     return list
 end
 
---- Lists every animation event of the shared biped animation tree, read once from the game files.
-function PosableHeroes.events()
-    if events then return events end
-    events = {}
-    local seen = {}
-    for name in (readFile(EVENTS_FILE) or ""):gmatch('<AnimTreeEvent name="([^"]+)"') do
-        if not seen[name] then
-            seen[name] = true
-            events[#events + 1] = { id = name, label = name }
+local function animations()
+    animData = animData or Loader.load("modules.hero_animations_data")
+    return animData
+end
+
+local function hasBit(hex, index)
+    local at = #hex - math.floor(index / 4)
+    local digit = at >= 1 and tonumber(hex:sub(at, at), 16) or 0
+    return math.floor(digit / 2 ^ (index % 4)) % 2 == 1
+end
+
+local function bankTokens(dna)
+    local bent = dna:lower():gsub("%.dnax$", ".bent")
+    if not (Crabe.Vfs and Crabe.Vfs.list) then return nil end
+    for _, override in ipairs(Crabe.Vfs.list("characters/")) do
+        if override.path:lower() == bent then
+            local tokens = {}
+            for token in (readFile("mods/" .. override.mod .. "/" .. override.path) or ""):gmatch("[%w_]+") do
+                tokens[token] = true
+            end
+            return tokens
         end
     end
-    table.sort(events, byLabel)
-    return events
+    return nil
+end
+
+local function anyClip(clips, tokens)
+    for _, clip in ipairs(clips) do
+        if tokens[clip] then return true end
+    end
+    return false
+end
+
+--- Lists the animation events this hero's motion bank can play, or every event when its bank is unknown.
+--- Game heroes come from the generated table, mod heroes from the .bent their mod ships.
+function PosableHeroes.eventsFor(hero)
+    if hero.events then return hero.events end
+    local data = animations()
+    local bits = data.heroes[hero.id]
+    local dna = hero.dna
+    if not dna then
+        for _, entry in ipairs(PosableHeroes.characters()) do
+            if entry.id == hero.id then dna = entry.dna end
+        end
+    end
+    local tokens = not bits and dna and bankTokens(dna)
+    local list = {}
+    for index, name in ipairs(data.events) do
+        local playable = true
+        if bits then
+            playable = hasBit(bits, index - 1)
+        elseif tokens then
+            playable = anyClip(data.clips[index], tokens)
+        end
+        if playable then list[#list + 1] = { id = name, label = name } end
+    end
+    hero.events = list
+    return list
+end
+
+--- Returns the POSES this hero can play.
+function PosableHeroes.posesFor(hero)
+    local available = {}
+    for _, entry in ipairs(PosableHeroes.eventsFor(hero)) do available[entry.id] = true end
+    local poses = {}
+    for _, pose in ipairs(PosableHeroes.POSES) do
+        if available[pose.id] then poses[#poses + 1] = pose end
+    end
+    return poses
 end
 
 
@@ -232,6 +287,7 @@ function PosableHeroes.spawn(entry)
     store.placed[#store.placed + 1] = {
         handle = handle,
         id = entry.id,
+        dna = entry.dna,
         label = entry.label,
         angleIndex = nearestAngleIndex(heading),
         scaleIndex = 4,
