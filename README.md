@@ -41,7 +41,7 @@ key names per action (`"menuToggle": ["F5"]`, `"back": ["BACKSPACE", "ESCAPE"]`)
 | Page | What it does |
 |---|---|
 | **Player & Heroes** | Swap character (Star Wars, Marvel, Disney, custom heroes), **any character in any playset**, level up, **level down**, max level, refund skill points (free respec), raise the skill point total a level 20 hero earns (75, 100, 150 or 200; next launch), refill health, add or remove Sparks |
-| **Spawners** | Scan the world inventory, spawn NPCs and objects (searchable), a **Modded** list of the entries a mod reskins (tagged `[Mod name]`), equip weapons from the loader catalog, clear placed objects |
+| **Spawners** | Scan the world inventory, spawn NPCs and objects (searchable), a **Modded** list of the entries a mod reskins (tagged `[Mod name]`), equip weapons from the loader catalog, clear placed objects, **Posable Heroes** (any playable hero, modded ones included, placed, turned, resized and frozen in a pose) |
 | **Animations** | The 7,784 choreographies of `Game.ListChoreographies()` by category, searchable, or play one by name |
 | **Cheats** | God Mode and **One shot kill** (x86 code caves), **No fall** (hits never knock the hero down; pair it with God Mode), **Stealth** (enemies stop targeting you), game speed (needs `Crabe.GameSpeed`), **Hero speed** (only your hero runs faster; needs `Game.SetActorSpeedScale`), Toy Box editor unlock |
 | **World** | Go to the main menu (world select, the pause menu's Quit without its popup), return to the hub, travel to any of the 187 base-game worlds of the game's zone list, listed by their in-game English names (searchable by name or zone id, grouped by playset; a world the game refuses is forced on a second press; the 1.05/1.06 and unreleased worlds are left to Disney Infinity Complete); free camera and teleport hero to camera; a Play Set zone loads through the pause menu's load path, so the Play Set save is kept |
@@ -61,6 +61,8 @@ On by default; the choice is saved in `crabemenu_settings.json`, and switching i
 Disney Infinity Complete defers to this copy when CrabeMenu is installed.
 
 A **Modded** spawner entry is one whose asset file a mod shadows in the VFS (needs a CrabeLoader with `Crabe.Vfs.list`).
+
+**Posable Heroes** need a CrabeLoader with `Crabe.callNative`. Heroes survive a mod reload (F4) and are forgotten on a world change. Animation events are experimental: a hero with no player ignores most of them.
 A reskin keeps the game's item id, so the list shows the vanilla name followed by the mod's name.
 
 Every action reports its real outcome in the footer. A failing native shows an error and is written to

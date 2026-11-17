@@ -50,6 +50,7 @@ local WorldModule = Loader.load("modules.world")
 local SkillPoints = Loader.load("modules.skill_points")
 local NoFall = Loader.load("modules.nofall")
 local Stealth = Loader.load("modules.stealth")
+local PosableHeroes = Loader.load("modules.posable_heroes")
 
 local FALLBACK_FRAME_TIME = 0.016
 
@@ -91,6 +92,7 @@ Crabe.Mod.register({
         SpeedHack.onTick()
         NoFall.onTick()
         Stealth.onTick()
+        PosableHeroes.onTick(dt)
         PlaysetBypass.onTick()
         Overlay.update(dt)
         SpeedrunHud.update(dt)
