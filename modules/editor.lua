@@ -18,6 +18,9 @@ Editor.history = {}
 Editor.quests = {}
 Editor.selectedQuestGiver = nil
 
+local TOGGLE_DEBOUNCE = 0.4
+local lastToggleClock = -1
+
 local function inFrontEnd()
     local world = Native.poll(Game.CurrentWorld)
     return type(world) ~= "string" or world:lower() == "frontend"
@@ -48,6 +51,10 @@ end
 
 --- Toggles the World Editor & Debug Mode (F1).
 function Editor.toggle(mode)
+    if mode == nil then
+        if State.gameClock - lastToggleClock < TOGGLE_DEBOUNCE then return Editor.active end
+        lastToggleClock = State.gameClock
+    end
     if inFrontEnd() then
         State.setStatus("Load a world before entering Editor Mode", "warning")
         return false

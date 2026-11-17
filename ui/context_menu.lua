@@ -157,10 +157,6 @@ local function buildSubmenus(telem, dna)
             { label = "Damage 25", disabled = not hasTarget, action = function() sendCmd(string.format("actor_health:%d:damage:25", h)) end },
             { label = "Kill Actor", disabled = not hasTarget, action = function() sendCmd(string.format("actor_health:%d:kill:0", h)) end },
             { label = "Destroy Actor", disabled = not hasTarget, action = function() sendCmd(string.format("actor_health:%d:destroy:0", h)) end },
-            { label = "Control Selected Actor", disabled = not hasTarget, action = function()
-                sendCmd(string.format("actor_control:%d", h))
-                closeMenu()
-            end },
         },
         visuals = {
             { label = (State.show3DCollisions and "[x] " or "[ ] ") .. "3D Collision Wireframe", keepOpen = true, action = function() State.show3DCollisions = not State.show3DCollisions end },

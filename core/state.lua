@@ -3,7 +3,7 @@ local Config = Loader.load("core.config")
 
 local State = {
     isMenuOpen = false,
-    isOverlayOpen = true,
+    isOverlayOpen = false,
     isSpeedrunHudOpen = false,
     show3DCollisions = false,
     show3DSplines = false,

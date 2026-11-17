@@ -108,6 +108,7 @@ Crabe.Mod.register({
         NoFall.onTick()
         Stealth.onTick()
         PlaysetBypass.onTick()
+        if Input.editorToggled() and not State.isTyping then Editor.toggle() end
         if Editor and Editor.onTick then Editor.onTick(dt) end
         Overlay.update(dt)
         SpeedrunHud.update(dt)
