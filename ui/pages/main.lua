@@ -11,6 +11,7 @@ end
 local ITEMS = {}
 for _, item in ipairs({
     Items.submenu("Player & Heroes", Loader.load("ui.pages.player"), "Change hero, level up, Sparks"),
+    Items.submenu("World Editor", Loader.load("ui.pages.editor"), "Level design, asset placement & Mod exporter (F1)"),
     Items.submenu("Spawners", Loader.load("ui.pages.spawners"), "Spawn NPCs, objects, weapons and tools"),
     Items.submenu("Animations", Loader.load("ui.pages.animations"), "Play any of the game's choreographies on your hero"),
     Items.submenu("Cheats", Loader.load("ui.pages.cheats"), "God mode, game speed, Toy Box editor"),
@@ -18,6 +19,7 @@ for _, item in ipairs({
     Items.submenu("Speedrun", Loader.load("ui.pages.speedrun"), "Timer, splits, saved positions, world reload"),
     optional("Multiplayer", "ui.pages.multiplayer", "Host or join a Toy Box session",
         "modules.multiplayer", "ui.pages.multiplayer") or false,
+    Items.submenu("Debug", Loader.load("ui.pages.debug"), "Skip cinematics, teleports, camera & diagnostics"),
     Items.submenu("Mods", Loader.load("ui.pages.mods"), "Menus added by your other mods (Disney Infinity Complete, Radahn...)"),
     Items.submenu("Settings", Loader.load("ui.pages.settings"), "Menu side and size, overlay, video"),
 }) do

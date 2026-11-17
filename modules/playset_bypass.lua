@@ -343,7 +343,7 @@ local function registerDataPatches()
     else
         -- GameplayDataMap::LoadPlayset only runs _loadforallplaysets_ and the active playset,
         -- never DataMap.Playset["toybox"] where munitions_toybox.lua and surfaceimpacts.lua live.
-        local toyboxMunitionsPatch = [[
+        local toyboxMunitionsPatch = [=[
 if DataMap and DataMap.Playset then
     local extraFiles = {
         "GameDB|gamedb/core/munitions_toybox.lua|1|munitions",
@@ -352,15 +352,21 @@ if DataMap and DataMap.Playset then
     local function addExtra(tbl)
         if not (tbl and tbl.Files) then return end
         local seen = {}
-        for _, f in ipairs(tbl.Files) do seen[f] = true end
-        for _, f in ipairs(extraFiles) do
-            if not seen[f] then tbl.Files[#tbl.Files + 1] = f end
+        local files = tbl.Files
+        for i = 1, #files do seen[ files[i] ] = true end
+        for i = 1, #extraFiles do
+            local f = extraFiles[i]
+            if not seen[f] then files[#files + 1] = f end
         end
     end
     addExtra(DataMap.Playset._loadforallplaysets_)
-    for _, ps in pairs(DataMap.Playset) do addExtra(ps) end
+    local playsetKeys = { "Dory", "dor", "DOR", "ToyBox", "toybox", "tbx", "TBX", "BattleArena", "mba", "MBA", "InsideOut", "out", "OUT", "Empire", "emp", "EMP", "Republic", "rep", "REP", "ForceAwakens", "psx", "PSX" }
+    for i = 1, #playsetKeys do
+        local k = playsetKeys[i]
+        addExtra(DataMap.Playset[k])
+    end
 end
-]]
+]=]
         Crabe.Hooks.patchChunk("DataMap", toyboxMunitionsPatch)
         log("Native engine loop active (S12-S15): registered lightweight ToyBox munitions patch")
     end

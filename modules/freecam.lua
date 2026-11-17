@@ -13,6 +13,9 @@ end
 function FreeCam.toggle()
     if FreeCam.isActive() then
         if not Native.run("Camera.StopFreeCam", Crabe.Camera.StopFreeCam) then return false end
+        if type(_G.System_UnlockAllControllers) == "function" then
+            pcall(_G.System_UnlockAllControllers)
+        end
         State.setStatus("Free camera disabled", "info")
         return true
     end
