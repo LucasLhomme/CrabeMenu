@@ -22,15 +22,28 @@ local function nudge(label, apply, hint)
     return Items.choice(label, NUDGE, function() return 2 end, function(index) apply(index == 3 and 1 or -1) end, hint)
 end
 
-local spawnPage = List.page("Spawn Posable Hero", PosableHeroes.characters, {
-    fields = { "label", "id" },
-    toItem = function(entry)
-        return Items.action(entry.label, function() PosableHeroes.spawn(entry) end,
-            "Spawns " .. entry.id .. " in front of you", entry.id)
-    end,
-    emptyLabel = "No hero found",
-    emptyHint = "The hero catalog (presentation/virtualreaderpc_data.lua) could not be read",
-})
+local function heroListPage(title, source)
+    return List.page(title, source, {
+        fields = { "label", "id" },
+        toItem = function(entry)
+            return Items.action(entry.label, function() PosableHeroes.spawn(entry) end,
+                "Spawns " .. entry.id .. " in front of you", entry.id)
+        end,
+        emptyLabel = "No hero found",
+        emptyHint = "No playable hero of this kind ships with the game or your mods",
+    })
+end
+
+local SPAWN_ITEMS = {}
+for _, franchise in ipairs(PosableHeroes.FRANCHISES) do
+    SPAWN_ITEMS[#SPAWN_ITEMS + 1] = Items.submenu(franchise.title,
+        heroListPage(franchise.title, function() return PosableHeroes.charactersOf(franchise.key) end),
+        "Spawn a " .. franchise.title .. " hero", function() return tostring(#PosableHeroes.charactersOf(franchise.key)) end)
+end
+SPAWN_ITEMS[#SPAWN_ITEMS + 1] = Items.submenu("All heroes", heroListPage("All Heroes", PosableHeroes.characters),
+    "Every hero in one searchable list", function() return tostring(#PosableHeroes.characters()) end)
+
+local spawnPage = { title = "Spawn Posable Hero", items = function() return SPAWN_ITEMS end }
 
 local function eventPage(hero)
     return List.page("Animation Events", PosableHeroes.events, {
