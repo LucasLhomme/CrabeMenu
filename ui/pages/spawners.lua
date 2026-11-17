@@ -74,6 +74,7 @@ local ITEMS = {
         countOf(function() return Spawner.objects end)),
     Items.submenu("Modded", moddedPage, "Scanned entries a mod reskins, tagged with the mod's name",
         countOf(function() return Spawner.modded end)),
+    Items.submenu("Posable Heroes", Loader.load("ui.pages.posable_heroes"), "Playable heroes, modded ones included, to place, turn, resize and animate"),
     Items.submenu("Weapons & Tools", weaponsPage, "Equip any weapon or tool"),
     Items.action("Clear placed objects", Spawner.clearPlaced, "Removes the objects and ghosts the editor placed"),
 }

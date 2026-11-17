@@ -169,6 +169,11 @@ local function navigate(dt)
     end
 end
 
+--- Goes back to the previous page, as the back key does; does nothing on the main page.
+function Menu.back()
+    if #stack > 1 then pop() end
+end
+
 --- Sets the page the menu opens on.
 function Menu.setRoot(page)
     root = page
