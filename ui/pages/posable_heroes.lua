@@ -46,7 +46,7 @@ SPAWN_ITEMS[#SPAWN_ITEMS + 1] = Items.submenu("All heroes", heroListPage("All He
 local spawnPage = { title = "Spawn Posable Hero", items = function() return SPAWN_ITEMS end }
 
 local function eventPage(hero)
-    return List.page("Animation Events", PosableHeroes.events, {
+    return List.page("Animation Events", function() return PosableHeroes.eventsFor(hero) end, {
         fields = { "id" },
         toItem = function(entry)
             return Items.action(entry.label, function() PosableHeroes.playEvent(hero, entry.id) end,
@@ -86,14 +86,14 @@ local function editorPage(hero)
             function(index) PosableHeroes.freezeDelayIndex = index end,
             "Each animation below freezes the hero this long after it starts: pick the moment of your shot"),
     }
-    for _, pose in ipairs(PosableHeroes.POSES) do
+    for _, pose in ipairs(PosableHeroes.posesFor(hero)) do
         items[#items + 1] = Items.action(pose.label, function() PosableHeroes.playEvent(hero, pose.id) end,
             "Plays " .. pose.id)
     end
     for _, item in ipairs({
         Items.submenu("All animation events", eventPage(hero),
-            "Every event of the hero animation tree; many only work from a matching state",
-            function() return tostring(#PosableHeroes.events()) end),
+            "Every animation this hero's motion bank has; some only start from a matching state",
+            function() return tostring(#PosableHeroes.eventsFor(hero)) end),
         Items.section("Delete"),
         Items.action("Remove", function()
             PosableHeroes.remove(hero)
