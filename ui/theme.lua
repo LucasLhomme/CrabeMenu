@@ -16,6 +16,14 @@ Theme.PALETTE = {
     green = { 60, 224, 124 },
     red = { 255, 92, 108 },
     black = { 0, 0, 0 },
+    -- Dark Obsidian (Linear / Dub.co) tokens for Dev Context Menu & Inspectors
+    obsidianBg = { 9, 9, 11 },
+    obsidianSurface = { 18, 19, 22 },
+    obsidianHover = { 24, 24, 27 },
+    obsidianBorder = { 39, 39, 42 },
+    obsidianText = { 250, 250, 250 },
+    obsidianMuted = { 161, 161, 170 },
+    obsidianSubtle = { 113, 113, 122 },
 }
 
 Theme.STATUS = {

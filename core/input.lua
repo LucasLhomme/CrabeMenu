@@ -202,4 +202,36 @@ function Input.primeTyping()
     for _, code in ipairs(TEXT_CODES) do edges["text" .. code] = isKeyDown(code) end
 end
 
+function Input.mouseLeftClicked()
+    return rising("mouse_l", isKeyDown(0x01))
+end
+
+function Input.mouseRightClicked()
+    return rising("mouse_r", isKeyDown(0x02))
+end
+
+function Input.contextMenuTriggered()
+    -- Alt + Right Click, VK_APPS (0x5D), or F10 (0x79)
+    local altRmb = isKeyDown(0x12) and rising("ctx_alt_rmb", isKeyDown(0x02))
+    local appsKey = rising("ctx_apps", isKeyDown(0x5D))
+    local f10Key = rising("ctx_f10", isKeyDown(0x79))
+    return altRmb or appsKey or f10Key
+end
+
+function Input.isEscapePressed()
+    return rising("ctx_esc", isKeyDown(VK.ESCAPE))
+end
+
+function Input.mousePosition()
+    if Crabe and Crabe.Plugins and Crabe.Plugins.get then
+        local raw = Crabe.Plugins.get("dev_toolkit.telemetry")
+        if raw and raw ~= "" then
+            local mx = tonumber(raw:match('"mouseX"%s*:%s*([%-0-9]+)'))
+            local my = tonumber(raw:match('"mouseY"%s*:%s*([%-0-9]+)'))
+            if mx and my then return mx, my end
+        end
+    end
+    return nil, nil
+end
+
 return Input
